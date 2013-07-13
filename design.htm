@@ -1,0 +1,359 @@
+<!doctype html>
+<meta charset="utf-8">
+<script src="http://crypto.stanford.edu/sjcl/sjcl.js"></script>
+<script>
+var boxSizingProp = 'boxSizing';
+{
+	var _s = document.documentElement.style;
+	if (!('boxSizing' in _s)) {
+		if ('MozBoxSizing' in _s) boxSizingProp = 'MozBoxSizing';
+	}
+}
+
+// =?magic?tags?base64-data?=
+var TAG_TEST_PATTERN = /^[@#]\w+$/;
+var TAG_PATTERN = /[@#]\w+/g;
+var WORD_PATTERN = /=\?zerokit(\w*)\?([\w@#,]*)\?([A-Za-z0-9+\/=]*)\?=/g;
+var OBSERVATION = {
+	childList: true,
+	characterData: true, // maybe not needed?
+	subtree: true
+};
+
+var keys = {'': [0x2d882231, 0x346dfd19, 0x6ed33f4f, 0x4751d2d5]};
+var encryptionSuffix = '';
+
+var inputCount = 1;
+var delegates = {};
+
+function decrypt(key, data, adata) {
+	var ct = sjcl.codec.base64.toBits(data);
+	var iv = ct.splice(0, 4);
+	var pt = sjcl.mode.ccm.decrypt(new sjcl.cipher.aes(key), ct, iv, sjcl.codec.utf8String.toBits(adata));
+	return sjcl.codec.utf8String.fromBits(pt);
+}
+
+function encrypt(key, data, adata) {
+	var pt = sjcl.codec.utf8String.toBits(data);
+	var iv = sjcl.random.randomWords(4, 0);
+	var ct = sjcl.mode.ccm.encrypt(new sjcl.cipher.aes(key), pt, iv, sjcl.codec.utf8String.toBits(adata));
+	return sjcl.codec.base64.fromBits(iv.concat(ct));
+}
+
+function decode(suffix, tags, data) {
+	if (!(suffix in keys)) throw new Error('unknown suffix');
+	return decrypt(keys[suffix], data, tags);
+}
+
+function encode(suffix, message) {
+	if (!(suffix in keys)) throw new Error('unknown suffix');
+	var tagSet = {};
+	var tagList = [];
+	var m;
+	while (m = TAG_PATTERN.exec(message)) {
+		var tag = m[0];
+		if (tag in tagSet) continue;
+		tagList.push(tag);
+	}
+	var tags = tagList.join(',');
+	var data = encrypt(keys[suffix], message, tags);
+	return '=?zerokit' + suffix + '?' + tags + '?' + data + '?=';
+}
+
+function processTextContent(root) {
+	var __ni, __n, __u, __v;
+
+	function __next() {
+		__n = __ni.nextNode();
+		__u = __v;
+		__v = __u + __n.nodeValue.length;
+	}
+
+	function __init() {
+		__ni = document.createNodeIterator(root, NodeFilter.SHOW_TEXT);
+		__v = 0;
+		__next();
+	}
+
+	function __setStart(r, i) {
+		while (__n) {
+			if (i >= __u && i < __v) return r.setStart(__n, i - __u);
+			__next();
+		}
+	}
+
+	function __setEnd(r, i) {
+		while (__n) {
+			if (i > __u && i <= __v) return r.setEnd(__n, i - __u);
+			__next();
+		}
+	}
+
+	function __length(n) {
+		// simplified implementation of
+		// http://dom.spec.whatwg.org/#concept-node-length
+		// supporting only Element and CharacterData Nodes
+		if (n.nodeType === document.TYPE_ELEMENT) {
+			return n.childNodes.length;
+		} else {
+			return n.length;
+		}
+	}
+
+	function __sink(r) {
+		// 1. sink from offsets to containers
+		if (r.startOffset !== 0) return;
+		if (r.endOffset !== __length(r.endContainer)) return;
+
+		// 2. sink from containers to common ancestor
+		var a = r.commonAncestorContainer;
+		{
+			var sc = r.startContainer;
+			while (sc !== a) {
+				if (sc.previousSibling) return;
+				sc = sc.parentNode;
+			}
+			var ec = r.endContainer;
+			while (ec !== a) {
+				if (ec.nextSibling) return;
+				ec = ec.parentNode;
+			}
+		}
+
+		// 3. sink from common ancestor to first sibling
+		while (a !== root) {
+			if (a.previousSibling) break;
+			if (a.nextSibling) break;
+			a = a.parentNode;
+		}
+
+		r.selectNode(a);
+	}
+
+	var text = root.textContent;
+	var wm = WORD_PATTERN.exec(text);
+	if (!wm) return;
+	var replacements = [];
+	__init();
+	do {
+		try {
+			var resultText = decode(wm[1], wm[2], wm[3]);
+			var wr = document.createRange();
+			__setStart(wr, wm.index);
+			var result;
+			if (wm[2]) {
+				var tags = {};
+				var tagsOffset = wm.index + 9 + wm[1].length + 1;
+				var tagsEnd = tagsOffset + wm[2].length;
+				var exprs = [];
+				while (tagsOffset < tagsEnd) {
+					var comma = text.indexOf(',', tagsOffset);
+					if (comma === -1 || comma > tagsEnd) comma = tagsEnd;
+					var tag = text.slice(tagsOffset, comma);
+					if (!TAG_TEST_PATTERN.test(tag)) continue;
+					var tr = document.createRange();
+					__setStart(tr, tagsOffset);
+					__setEnd(tr, comma);
+					__sink(tr);
+					tags[tag] = tr.cloneContents();
+					exprs.push(tag + '\\b'); // tags don't need escaping
+					tagsOffset = comma + 1;
+				}
+				result = document.createDocumentFragment();
+				var tagRegex = new RegExp(exprs.join('|'), 'g');
+				var last = 0;
+				var tm;
+				while (tm = tagRegex.exec(resultText)) {
+					if (tm.index > last) {
+						result.appendChild(document.createTextNode(resultText.slice(last, tm.index)));
+					}
+					result.appendChild(tags[tm[0]].cloneNode(true)); // lol chrome defaults to (false)
+					last = tm.index + tm[0].length;
+				}
+				if (last < resultText.length) {
+					result.appendChild(document.createTextNode(resultText.slice(last)));
+				}
+			} else {
+				result = document.createTextNode(resultText);
+			}
+			__setEnd(wr, wm.index + wm[0].length);
+			if (wr.startContainer.parentNode === wr.endContainer.parentNode) {
+				replacements.push([wr, result]);
+			} else {
+				console.log('aborting suspicious range', wr.startContainer.parentNode, wr.endContainer.parentNode);
+			}
+		} catch (e) {
+			console.error(e);
+		}
+		wm = WORD_PATTERN.exec(text);
+	} while(wm);
+	for (var i = 0; i < replacements.length; i++) {
+		var wr = replacements[i][0];
+		var result = replacements[i][1];
+		wr.deleteContents();
+		wr.insertNode(result);
+	}
+}
+
+function processInput(node) {
+	var id = '' + inputCount++;
+	node.dataset.zerokitInputDelegate = id;
+	var input = document.createElement(node.tagName);
+	input.value = node.value.replace(WORD_PATTERN, function (w, suffix, tags, data) {
+		try {
+			return decode(suffix, tags, data);
+		} catch (e) {
+			console.error(e);
+			return w;
+		}
+	});
+	input.style.position = 'absolute';
+	input.style.left = node.offsetLeft + 'px';
+	input.style.top = node.offsetTop + 'px';
+	input.style[boxSizingProp] = 'border-box'; // lol firefox
+	input.style.width = node.offsetWidth + 'px';
+	input.style.height = node.offsetHeight + 'px';
+	input.style.margin = '0';
+	input.addEventListener('change', function (e) {
+		var se = document.createEvent('Event');
+		se.initEvent('change', true, false);
+		node.value = encode(encryptionSuffix, input.value);
+		node.dispatchEvent(se);
+	});
+	// input.addEventListener('input', function (e) {
+	// 	var se = document.createEvent('Event');
+	// 	se.initEvent('input', true, false);
+	// 	node.value = encode(encryptionSuffix, input.value);
+	// 	node.dispatchEvent(se);
+	// });
+	delegates[id] = input;
+	node.parentNode.insertBefore(input, node.nextSibling);
+}
+
+function processRich(node) {
+	var id = '' + inputCount++;
+	node.contentEditable = false;
+	node.dataset.zerokitInputDelegate = id;
+	var input = document.createElement('textarea');
+	input.value = node.textContent.replace(WORD_PATTERN, function (w, suffix, tags, data) {
+		try {
+			return decode(suffix, tags, data);
+		} catch (e) {
+			console.error(e);
+			return w;
+		}
+	});
+	input.style.position = 'absolute';
+	input.style.left = node.offsetLeft + 'px';
+	input.style.top = node.offsetTop + 'px';
+	input.style[boxSizingProp] = 'border-box'; // lol firefox
+	input.style.width = node.offsetWidth + 'px';
+	input.style.height = node.offsetHeight + 'px';
+	input.style.margin = '0';
+	input.addEventListener('change', function (e) {
+		var se = document.createEvent('Event');
+		se.initEvent('change', true, false);
+		off();
+		node.textContent = encode(encryptionSuffix, input.textContent);
+		on();
+		node.dispatchEvent(se);
+	});
+	delegates[id] = input;
+	node.parentNode.insertBefore(input, node.nextSibling);
+}
+
+function onCharacterData(target) {
+	// console.log('characterData', target); // %%%
+}
+
+function onAddedNode(target, addedNode) {
+	console.log('addedNode', target, addedNode); // %%%
+	processTextContent(addedNode);
+	if (addedNode.nodeType !== document.ELEMENT_NODE) return;
+	var inputs = addedNode.querySelectorAll('input,textarea');
+	for (var i = 0; i < inputs.length; i++) {
+		var input = inputs[i];
+		if (input.tagName.toLowerCase() === 'input' && input.type !== 'text') continue;
+		processInput(input);
+	}
+	var riches = addedNode.querySelectorAll('[contenteditable]');
+	for (i = 0; i < riches.length; i++) {
+		processRich(riches[i]);
+	}
+}
+
+function onRemovedNode(target, removedNode) {
+	if (removedNode.nodeType === document.ELEMENT_NODE &&
+	    'zerokitInputDelegate' in removedNode.dataset) {
+		target.removeChild(delegates[removedNode.dataset.zerokitInputDelegate]);
+	}
+}
+
+var o;
+
+function on() {
+	o.observe(document, OBSERVATION);
+}
+
+function off() {
+	o.disconnect();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+	onAddedNode(document.documentElement, document.body);
+	o = new MutationObserver(function (mrs) {
+		off();
+		for (var i = 0; i < mrs.length; i++) {
+			var mr = mrs[i];
+			switch (mr.type) {
+			case 'characterData':
+				onCharacterData(mr.target);
+				break;
+			case 'childList':
+				for (var j = 0; j < mr.removedNodes.length; j++) {
+					onRemovedNode(mr.target, mr.removedNodes[j]);
+				}
+				for (j = 0; j < mr.addedNodes.length; j++) {
+					onAddedNode(mr.target, mr.addedNodes[j]);
+				}
+				break;
+			}
+		}
+		on();
+	});
+	on();
+});
+</script>
+<body>
+<p>Hello world!</p>
+<p>basic text =?zerokit??uzizNx/D1eHTFLtNU2vh8fDv9iyA7G5ArKJkkOo=?= test</p>
+<p><input id="testinput" value="=?zerokit??IUVJDKZkFig5mzMIi716Xw8bB1plPPIRywljzKM=?="></p>
+<p>you said: <span id="display"></span></p>
+<p><input type="button" value="remove input" onclick="removeInput()"></p>
+<p><div id="test2" style="display:inline-block;padding:2px;width:132px;height:2em;background-color:#ffff80;" contenteditable>hello</div></p>
+<p>you said: <code id="disp2"></code></p>
+<p>and now the <em>html</em> test: "=?zerokit?<a href="/hash/foo">#foo</a>,<a href="/user/bar">@bar</a>?T/iCKKgqUs5VU+nnQ8Ffi4501joBKj3h75J3zfsiUtCM0SrKJcpUJ8VPulXf8OLC7X2ttA==?=" good luck</p>
+<script>
+var testinput = document.getElementById('testinput');
+var display = document.getElementById('display');
+testinput.addEventListener('input', function () {
+	display.textContent = testinput.value;
+	display.style.color = 'red';
+});
+testinput.addEventListener('change', function () {
+	display.textContent = testinput.value;
+	display.style.color = '';
+	console.log('onchange to ' + testinput.value);
+});
+function removeInput() {
+	if (testinput) {
+		testinput.parentNode.removeChild(testinput);
+		testinput = null;
+	}
+}
+var test2 = document.getElementById('test2');
+var disp2 = document.getElementById('disp2');
+test2.addEventListener('input', function () {
+	disp2.textContent = test2.innerHTML;
+});
+</script>
