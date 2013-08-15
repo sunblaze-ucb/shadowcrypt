@@ -3,24 +3,22 @@
 <body>
 <p>Hello world!</p>
 <p>basic text =?zerokit??uzizNx/D1eHTFLtNU2vh8fDv9iyA7G5ArKJkkOo=?= test</p>
-<p><input id="testinput" value="=?zerokit??IUVJDKZkFig5mzMIi716Xw8bB1plPPIRywljzKM=?="></p>
+<form method="post" action="http://echo.opera.com/">
+<p><input id="testinput" name="q" value="=?zerokit??IUVJDKZkFig5mzMIi716Xw8bB1plPPIRywljzKM=?="></p>
 <p>you said: <span id="display"></span></p>
+</form>
 <p><input type="button" value="remove input" onclick="removeInput()"></p>
-<p><div id="test2" style="display:inline-block;padding:2px;width:132px;height:2em;background-color:#ffff80;" contenteditable>hello</div></p>
+<p><div id="test2" style="display:inline-block;padding:2px;width:132px;min-height:2em;background-color:#ffff80;" contenteditable>hello</div></p>
 <p>you said: <code id="disp2"></code></p>
-<p>and now the <em>html</em> test: "=?zerokit?<a href="/hash/foo">#foo</a>,<a href="/user/bar">@bar</a>?T/iCKKgqUs5VU+nnQ8Ffi4501joBKj3h75J3zfsiUtCM0SrKJcpUJ8VPulXf8OLC7X2ttA==?=" good luck</p>
+<p>and now the <em>html</em> test: &quot;=?zerokit?<a href="/hash/foo">#foo</a>,<a href="/user/bar">@bar</a>?T/iCKKgqUs5VU+nnQ8Ffi4501joBKj3h75J3zfsiUtCM0SrKJcpUJ8VPulXf8OLC7X2ttA==?=&quot; good luck</p>
 <script>
 var testinput = document.getElementById('testinput');
 var display = document.getElementById('display');
-testinput.addEventListener('input', function () {
-	display.textContent = testinput.value;
-	display.style.color = 'red';
+testinput.addEventListener('change', function () {
+	var v = testinput.value;
+	console.log('onchange to ' + v);
+	display.textContent = v;
 });
-testinput.onchange = function () {
-	display.textContent = testinput.value;
-	display.style.color = '';
-	console.log('onchange to ' + testinput.value);
-};
 function removeInput() {
 	if (testinput) {
 		testinput.parentNode.removeChild(testinput);
@@ -30,7 +28,9 @@ function removeInput() {
 var test2 = document.getElementById('test2');
 var disp2 = document.getElementById('disp2');
 test2.addEventListener('input', function () {
-	disp2.textContent = test2.innerHTML;
+	var v = test2.innerHTML;
+	console.log('contentEditable input to ' + v);
+	disp2.textContent = v;
 });
 </script>
 <p><a href="javascript:void(function () { var s = document.createElement('script'); s.src = '//inst.eecs.berkeley.edu/~warrenhe/zerokit/zerokit.js'; document.head.appendChild(s); }());">bookmarklet</a></p>

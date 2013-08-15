@@ -245,144 +245,125 @@ Rewriter.processString = function (str) {
 
 var Widgets = {
 	WIDGET_SELECTOR: 'input,textarea,[contenteditable]',
-	DELEGATED_SELECTOR: '[data-zerokit-delegate-id]',
-	ADAPTERS: {
-		input: {
-			delegateTag: 'input',
-			valueProp: 'value',
-			pauseObservation: false,
-			enableProp: 'disabled',
-			enabledTrue: false,
-			enabledFalse: true,
-			transferEvents: ['input', 'change']
-		},
-		textarea: {
-			delegateTag: 'textarea',
-			valueProp: 'value',
-			pauseObservation: false,
-			enableProp: 'disabled',
-			enabledTrue: false,
-			enabledFalse: true,
-			transferEvents: ['input', 'change']
-		},
-		contentEditable: {
-			delegateTag: 'textarea',
-			valueProp: 'textContent',
-			pauseObservation: true,
-			enableProp: 'contentEditable',
-			enabledTrue: 'true',
-			enabledFalse: 'inherit',
-			transferEvents: ['input']
-		},
+	DELEGATED_SELECTOR: '[data-zerokit-shimmed]',
+	PROPS: {
+		inputValue: Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value'),
+		textareaValue: Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value'),
+		innerHTML: Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML'),
+		textContent: Object.getOwnPropertyDescriptor(Node.prototype, 'textContent')
 	},
-	lastId: 1,
-	removal: {}
+	adapters: {}
 };
 
-Widgets.getAdapterFor = function (node) {
+Widgets.adapters.input = {
+	name: 'input',
+	init: function (e) {
+		e.value = Rewriter.processString(e.value);
+	},
+	props: {
+		value: {
+			get: function () {
+				var orig = Widgets.PROPS.inputValue.get.call(this);
+				return Codec.encode(Crypto.defaultSuffix, orig);
+			},
+			set: function (v) {
+				var clear = Rewriter.processString(v);
+				Widgets.PROPS.inputValue.set.call(this, v);
+			}
+		}
+	}
+};
+
+Widgets.adapters.textarea = {
+	name: 'textarea',
+	init: function (e) {
+		e.value = Rewriter.processString(e.value);
+	},
+	props: {
+		value: {
+			get: function () {
+				var orig = Widgets.PROPS.textareaValue.get.call(this);
+				return Codec.encode(Crypto.defaultSuffix, orig);
+			},
+			set: function (v) {
+				var clear = Rewriter.processString(v);
+				Widgets.PROPS.textareaValue.set.call(this, v);
+			}
+		}
+	}
+};
+
+Widgets.adapters.contentEditable = {
+	name: 'contentEditable',
+	init: function (e) {
+		// observer/rewriter should take care of it
+	},
+	props: {
+		innerHTML: {
+			get: function () {
+				var orig = Widgets.PROPS.textContent.get.call(this);
+				// result of encode is HTML safe
+				return Codec.encode(Crypto.defaultSuffix, orig);
+			},
+			// observer/rewriter should take care of it
+			set: Widgets.PROPS.innerHTML.set
+		}
+	}
+};
+
+Widgets.init = function () {
+	var ss = document.createElement('style');
+	ss.textContent =
+		Widgets.DELEGATED_SELECTOR + '{outline:1px solid #c00040!important;outline-offset:-1px!important;}' +
+		Widgets.DELEGATED_SELECTOR + ':focus{outline:2px solid #ff0055!important;}';
+	document.head.appendChild(ss);
+};
+
+Widgets.getAdapter = function (node) {
 	var tag = node.tagName.toLowerCase();
 	if (tag === 'input') {
 		if (node.type === 'text') {
 			// TODO: more heuristics
-			return Widgets.ADAPTERS.input;
+			return Widgets.adapters.input;
 		}
 	} else if (tag === 'textarea') {
-		return Widgets.ADAPTERS.textarea;
+		return Widgets.adapters.textarea;
 	} else {
 		if (node.contentEditable === 'true') {
-			return Widgets.ADAPTERS.contentEditable;
+			return Widgets.adapters.contentEditable;
 		}
 	}
 	return null;
 };
 
-Widgets.setStyle = function (dst) {
-	dst.style.position = 'absolute';
-	dst.style.margin = '0';
-	dst.style.border = '2px solid #c00040';
-	dst.style.padding = '1px';
-	dst.style.zIndex = '8192';
-	// TODO: more styles!
-};
-
-Widgets.setDimensions = function (dst, src) {
-	var rect = src.getBoundingClientRect();
-	dst.style.left = rect.left - window.pageXOffset + 'px';
-	dst.style.top = rect.top - window.pageYOffset + 'px';
-	dst.style.width = rect.width - 6 + 'px';
-	dst.style.height = rect.height - 6 + 'px';
-};
-
-Widgets.addDelegateFor = function (node) {
-	var adapter = Widgets.getAdapterFor(node);
+Widgets.shim = function (node) {
+	var adapter = Widgets.getAdapter(node);
 	if (!adapter) return;
 
-	if ('zerokitIsDelegate' in node.dataset) return;
+	if ('zerokitShimmed' in node.dataset) return;
+	node.dataset.zerokitShimmed = adapter.name;
 
-	if ('zerokitDelegateId' in node.dataset) return;
-	var id = '' + Widgets.lastId++;
-	node.dataset.zerokitDelegateId = id;
-
-	var delegate = document.createElement(adapter.delegateTag);
-	delegate.dataset.zerokitIsDelegate = 'yes';
-	delegate.value = Rewriter.processString(node[adapter.valueProp]);
-
-	Widgets.setStyle(delegate);
-	Widgets.setDimensions(delegate, node);
-
-	var transferHandler = function (e) {
-		if (adapter.pauseObservation) Observer.off();
-		node[adapter.valueProp] = Codec.encode(Crypto.defaultSuffix, delegate.value);
-		if (adapter.pauseObservation) Observer.on();
-		var event = document.createEvent('Event');
-		event.initEvent(e.type, e.bubbles, e.cancelable);
-		node.dispatchEvent(event);
-	};
-	var delegateToggleHandler = function (e) {
-		if (e.keyCode == 32 && e.ctrlKey) {
-			delegate.style.visibility = 'hidden';
-			// node[adapter.enableProp] = adapter.enableTrue;
-			node.focus();
-		}
-	};
-	var nodeToggleHandler = function (e) {
-		if (e.keyCode == 32 && e.ctrlKey) {
-			delegate.style.visibility = '';
-			delegate.focus();
-			// node[adapter.enableProp] = adapter.enableFalse;
-		}
-	};
-
-	for (var i = 0; i < adapter.transferEvents.length; i++) {
-		delegate.addEventListener(adapter.transferEvents[i], transferHandler);
-	}
-
-	delegate.addEventListener('keydown', delegateToggleHandler);
-	node.addEventListener('keydown', nodeToggleHandler);
-
-	var removeHandler = function (e) {
-		delete node.dataset.zerokitDelegateId;	
-		node.removeEventListener('keydown', nodeToggleHandler);
-		// node[adapter.enableProp] = adapter.enabledTrue;
-		document.body.removeChild(delegate);
-		delete Widgets.removal[id];
-	};
-
-	// node[adapter.enableProp] = adapter.enabledFalse;
-	document.body.appendChild(delegate);
-	Widgets.removal[id] = removeHandler;
+	adapter.init(node);
+	Object.defineProperties(node, adapter.props);
 };
 
-Widgets.removeDelegateFor = function (node) {
-	if (!('zerokitDelegateId' in node.dataset)) return;
-	var id = node.dataset.zerokitDelegateId;
-	Widgets.removal[id]();
+Widgets.unshim = function (node) {
+	if (!('zerokitShimmed' in node.dataset)) return;
+	var adapterName = node.dataset.zerokitShimmed;
+	delete node.dataset.zerokitShimmed;
+
+	if (!Widgets.adapters.hasOwnProperty(adapterName)) return;
+	var adapter = Widgets.adapters[adapterName];
+
+	for (var prop in adapter.props) {
+		delete node[prop];
+	}
 };
 
 var Observer = {
 	OPTIONS: {
 		childList: true,
-		characterData: true, // maybe not needed?
+		// characterData: true, // maybe not needed?
 		subtree: true
 	},
 	observer: null
@@ -396,29 +377,29 @@ Observer.off = function () {
 	Observer.observer.disconnect();
 };
 
-Observer.onCharacterData = function (target) {
-	console.log('characterData', target, target.nodeValue); // %%%
-};
+// Observer.onCharacterData = function (target) {
+	// console.log('characterData', target, target.nodeValue); // %%%
+// };
 
 Observer.onAddedNode = function (target, addedNode) {
-	console.log('addedNode', target, addedNode); // %%%
+	// console.log('addedNode', target, addedNode); // %%%
 	Rewriter.rewriteMarkup(addedNode);
 	if (addedNode.nodeType !== document.ELEMENT_NODE) return;
 	var widgets = addedNode.querySelectorAll(Widgets.WIDGET_SELECTOR);
 	for (var i = 0; i < widgets.length; i++) {
-		Widgets.addDelegateFor(widgets[i]);
+		Widgets.shim(widgets[i]);
 	}
-	Widgets.addDelegateFor(addedNode);
+	Widgets.shim(addedNode);
 };
 
 Observer.onRemovedNode = function (target, removedNode) {
-	console.log('removedNode', target, removedNode); // %%%
+	// console.log('removedNode', target, removedNode); // %%%
 	if (removedNode.nodeType !== document.ELEMENT_NODE) return;
 	var delegated = removedNode.querySelectorAll(Widgets.DELEGATED_SELECTOR);
 	for (var i = 0; i < delegated.length; i++) {
-		Widgets.removeDelegateFor(delegated[i]);
+		Widgets.unshim(delegated[i]);
 	}
-	Widgets.removeDelegateFor(removedNode);
+	Widgets.unshim(removedNode);
 }
 
 Observer.callback = function (mutationRecords) {
@@ -426,9 +407,9 @@ Observer.callback = function (mutationRecords) {
 	for (var i = 0; i < mutationRecords.length; i++) {
 		var mutationRecord = mutationRecords[i];
 		switch (mutationRecord.type) {
-		case 'characterData':
-			Observer.onCharacterData(mutationRecord.target);
-			break;
+		// case 'characterData':
+			// Observer.onCharacterData(mutationRecord.target);
+			// break;
 		case 'childList':
 			for (var j = 0; j < mutationRecord.removedNodes.length; j++) {
 				Observer.onRemovedNode(mutationRecord.target, mutationRecord.removedNodes[j]);
@@ -452,6 +433,7 @@ Observer.init = function () {
 	Observer.on();
 };
 
+Widgets.init();
 Observer.init();
 
 }());
