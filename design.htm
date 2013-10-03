@@ -3,7 +3,7 @@
 <script src="ShadowDOM/shadowdom.js"></script>
 <body>
 <p>Hello world!</p>
-<p>basic text =?zerokit??uzizNx/D1eHTFLtNU2vh8fDv9iyA7G5ArKJkkOo=?= test</p>
+<p id="decoded1">basic text =?zerokit??uzizNx/D1eHTFLtNU2vh8fDv9iyA7G5ArKJkkOo=?= test</p>
 <form method="post" action="http://echo.opera.com/">
 <p><input id="testinput" name="q" value="=?zerokit??IUVJDKZkFig5mzMIi716Xw8bB1plPPIRywljzKM=?="></p>
 <p>you said: <span id="display"></span></p>
@@ -11,7 +11,7 @@
 <p><input type="button" value="remove input" onclick="removeInput()"></p>
 <p><div id="test2" style="display:inline-block;padding:2px;width:132px;min-height:2em;background-color:#ffff80;" contenteditable>hello</div></p>
 <p>you said: <code id="disp2"></code></p>
-<p>and now the <em>html</em> test: &quot;=?zerokit?<a href="/hash/foo">#foo</a>,<a href="/user/bar">@bar</a>?T/iCKKgqUs5VU+nnQ8Ffi4501joBKj3h75J3zfsiUtCM0SrKJcpUJ8VPulXf8OLC7X2ttA==?=&quot; good luck</p>
+<p id="decoded2">and now the <em>html</em> test: &quot;=?zerokit?<a href="/hash/foo">#foo</a>,<a href="/user/bar">@bar</a>?T/iCKKgqUs5VU+nnQ8Ffi4501joBKj3h75J3zfsiUtCM0SrKJcpUJ8VPulXf8OLC7X2ttA==?=&quot; good luck</p>
 <script>
 var testinput = document.getElementById('testinput');
 var display = document.getElementById('display');
@@ -35,4 +35,6 @@ test2.addEventListener('input', function () {
 });
 </script>
 <p><a href="javascript:void(function () { var s = document.createElement('script'); s.src = '//inst.eecs.berkeley.edu/~warrenhe/zerokit/zerokit.js'; document.head.appendChild(s); }());">bookmarklet</a></p>
+<p><input type="button" value="check light dom 1" onclick="alert(document.getElementById('decoded1').innerHTML)"></p>
+<p><input type="button" value="check light dom 2" onclick="alert(document.getElementById('decoded2').innerHTML)"></p>
 <script src="zerokit.js"></script>

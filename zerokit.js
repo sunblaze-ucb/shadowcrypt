@@ -32,9 +32,34 @@ Crypto.decrypt = function (key, data, adata) {
 	return sjcl.codec.utf8String.fromBits(pt);
 };
 
+// Polymer's ShadowDOM polyfill doesn't support document.createNodeIterator
+// this implements something like document.createNodeIterator(root, NodeFilter.SHOW_TEXT)
+// no need for liveness
+// might as well skip empty text nodes too
+var SnapshotTextIterator = function (root) {
+	this.index = 0;
+	this.nodes = [];
+	this.walk(root);
+};
+
+SnapshotTextIterator.prototype.walk = function (node) {
+	if (node.nodeType === document.TEXT_NODE) {
+		if (node.data.length == 0) return;
+		this.nodes.push(node);
+	} else if (node.nodeType === document.ELEMENT_NODE) {
+		for (var i = 0; i < node.childNodes.length; i++) {
+			this.walk(node.childNodes[i]);
+		}
+	}
+};
+
+SnapshotTextIterator.prototype.nextNode = function (node) {
+	return this.nodes[this.index++];
+};
+
 var Scanner = function (root) {
 	this.root = root;
-	this.iter = document.createNodeIterator(root, NodeFilter.SHOW_TEXT);
+	this.iter = new SnapshotTextIterator(root);
 	this.u = 0;
 	this.v = 0;
 	this.next();
@@ -189,6 +214,7 @@ Rewriter.fastFail = function (text) {
 };
 
 Rewriter.findCodes = function (node) {
+	// since it's textContent, things get weird with comments and processing instructions
 	var text = node.textContent;
 	if (Rewriter.fastFail(text)) return null;
 	var codes = [];
@@ -220,8 +246,11 @@ Rewriter.repaceCodes = function (codes) {
 	for (var i = 0; i < codes.length; i++) {
 		var range = codes[i][0];
 		var messageNode = codes[i][1];
-		range.deleteContents();
-		range.insertNode(messageNode);
+		var span = document.createElement('span');
+		span.dataset.zerokitReplaced = 'yes';
+		range.surroundContents(span);
+		var shadow = span.createShadowRoot();
+		shadow.appendChild(messageNode);
 	}
 };
 
