@@ -1,4 +1,4 @@
-(function () {
+var zerokit = function () {
 
 var Compat = {
 	createShadowRoot: Element.prototype.createShadowRoot,
@@ -547,4 +547,8 @@ Observer.init = function () {
 Widgets.init();
 Observer.init();
 
-}());
+};
+
+var o = document.createElement('script');
+o.textContent = '(' + zerokit + ')()';
+document.documentElement.appendChild(o);
