@@ -18,7 +18,7 @@ var content = function () {
 			set: function (v) {
 				var add = !document.contains(this);
 				if (add) document.documentElement.appendChild(this);
-				e = new CustomEvent('zerokit-prop-set', {detail: {prop: prop, value: value}});
+				e = new CustomEvent('zerokit-prop-set', {detail: {prop: prop, value: v}});
 				this.dispatchEvent(e);
 				if (add) document.documentElement.removeChild(this);
 			}
