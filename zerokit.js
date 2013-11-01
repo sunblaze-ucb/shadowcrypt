@@ -1,28 +1,18 @@
 (function () {
 
 var Compat = {
-	fills: {},
 	createShadowRoot: Element.prototype.createShadowRoot,
 	inputValue: Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value'),
 	textAreaValue: Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')
 };
 
-Compat.fills.propExt = function (prop) {
-	return {
-		get: function () {
-			return zerokitGetDefault(this, prop);
-		},
-		set: function (v) {
-			zerokitSetDefault(this, prop, v);
-		}
-	};
-};
-
 Compat.init = function () {
-	if (!Compat.createShadowRoot) Compat.createShadowRoot = Element.prototype.webkitCreateShadowRoot;
-	if (!Compat.createShadowRoot) Compat.throwIncompat('ShadowDOM');
-	if (!Compat.inputValue) Compat.inputValue = Compat.fills.propExt('value');
-	if (!Compat.textAreaValue) Compat.textAreaValue = Compat.fills.propExt('value');
+	if (!Compat.createShadowRoot && Element.prototype.webkitCreateShadowRoot) Compat.createShadowRoot = Element.prototype.webkitCreateShadowRoot;
+	if (!Compat.createShadowRoot) Compat.throwIncompat('Element#createShadowRoot');
+	if (!Compat.inputValue && window.zerokitDefaultAccessor) Compat.inputValue = window.zerokitDefaultAccessor('value');
+	if (!Compat.inputValue) Compat.throwIncompat('HTMLInputElement#value');
+	if (!Compat.textAreaValue && window.zerokitDefaultAccessor) Compat.textAreaValue = window.zerokitDefaultAccessor('value');
+	if (!Compat.textAreaValue) Compat.throwIncompat('HTMLTextAreaElement#value');
 };
 
 Compat.throwIncompat = function (feature) {
