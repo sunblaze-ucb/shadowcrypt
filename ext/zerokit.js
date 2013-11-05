@@ -310,6 +310,7 @@ Widgets.getId = function (label) {
 
 Widgets.AbstractAdapter = function (e) {
 	this.node = e;
+	this.node.dataset.zerokitShimmed = 'yes';
 	this.node.zerokitShimmed = true;
 	this.node.zerokitWeaken = this.weaken.bind(this);
 	this.node.zerokitUnweaken = this.unweaken.bind(this);
