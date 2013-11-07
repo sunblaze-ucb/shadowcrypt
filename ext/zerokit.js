@@ -125,8 +125,9 @@ Scanner.prototype.sink = function (range) {
 };
 
 var Tags = {
-	TAG_TEST_PATTERN: /^[@#]\w+$/,
-	TAG_PATTERN: /[@#]\w+/g
+	TAG_PATTERN: /(?:@|#|\/r\/|\/u\/)\w+/g,
+	TAG_TEST_PATTERN: /^(?:@|#|\/r\/|\/u\/)\w+$/, // the above with ^...$
+	// remember to change Codec.CODE_PATTERN too
 };
 
 Tags.extractTags = function (message) {
@@ -186,7 +187,7 @@ Tags.insertTags = function (message, tags) {
 };
 
 var Codec = {
-	CODE_PATTERN: /=\?zerokit(\w*)\?([\w@#,]*)\?([A-Za-z0-9+\/=]*)\?=/g
+	CODE_PATTERN: /=\?zerokit(\w*)\?([\w@#\/,]*)\?([A-Za-z0-9+\/=]*)\?=/g
 };
 
 Codec.encode = function (suffix, message) {
