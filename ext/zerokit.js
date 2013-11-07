@@ -2,6 +2,7 @@ var zerokit = function () {
 
 var Compat = {
 	createShadowRoot: Element.prototype.createShadowRoot,
+	afterSubmit: function (f) { setTimeout(f, 0); },
 	inputValue: Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value'),
 	textAreaValue: Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')
 };
@@ -20,23 +21,6 @@ Compat.throwIncompat = function (feature) {
 };
 
 Compat.init();
-
-var Island = {
-	container: null,
-	reset: null
-};
-
-Island.init = function () {
-	Island.reset = document.createElement('form');
-	Island.reset.id = 'zerokit-reset';
-	Island.container = document.createElement('div');
-	Island.container.id = 'zerokit-island';
-	Island.container.style.display = 'none';
-	Island.container.appendChild(Island.reset);
-	document.documentElement.insertBefore(Island.container, document.head);
-};
-
-Island.init();
 
 // this is from from http://crypto.stanford.edu/sjcl/sjcl.js
 // narrowed down to bitArray, base64, utf8String, aes, and ccm
@@ -229,15 +213,15 @@ Rewriter.fastFail = function (text) {
 Rewriter.checkBlacklist = function (node) {
 	if (!node) return false;
 	if (node.nodeType === document.ELEMENT_NODE) {
-		if (node.zerokitRewritten) return true;
-		if (node.zerokitShimmed) return true;
+		if ('zerokitRewritten' in node) return true;
+		if ('zerokitUpdateContent' in node) return true;
 		if (node.tagName.toLowerCase() === 'textarea') return true;
 	}
 	return Rewriter.checkBlacklist(node.parentNode);
 };
 
 Rewriter.findCodes = function (node) {
-	// since it's textContent, things get weird with comments and processing instructions
+	// caveat: uses comments and processing instructions
 	var text = node.textContent;
 	if (Rewriter.fastFail(text)) return null;
 	var codes = [];
@@ -270,6 +254,7 @@ Rewriter.repaceCodes = function (codes) {
 	for (var i = 0; i < codes.length; i++) {
 		var range = codes[i][0];
 		var messageNode = codes[i][1];
+		// caveat: this doesn't work in <title>
 		var span = document.createElement('span');
 		span.zerokitReplaced = true;
 		range.surroundContents(span);
@@ -297,64 +282,65 @@ Rewriter.processString = function (str) {
 };
 
 var Widgets = {
-	WIDGET_SELECTOR: 'input,textarea,[contenteditable]',
-	SHIMMED_SELECTOR: '[data-zerokit-shimmed]',
+	WIDGET_SELECTOR: 'form,input,textarea,[contenteditable]',
 	delegateStyle: null,
-	adapters: {},
-	uniqCounter: 0
-};
-
-Widgets.getId = function (label) {
-	return 'zerokit-' + label + '-' + Widgets.uniqCounter++;
+	adapters: {}
 };
 
 Widgets.AbstractAdapter = function (e) {
 	this.node = e;
-	this.node.dataset.zerokitShimmed = 'yes';
-	this.node.zerokitShimmed = true;
-	this.node.zerokitWeaken = this.weaken.bind(this);
-	this.node.zerokitUnweaken = this.unweaken.bind(this);
-	this.node.zerokitUpdateContent = this.updateContent.bind(this);
 };
 
-Widgets.AbstractAdapter.prototype.weaken = function () { };
+Widgets.adapters.Form = function (e) {
+	Widgets.AbstractAdapter.call(this, e);
+	this.submitOrig = this.node.submit;
+	this.node.addEventListener('submit', this.onSubmit.bind(this));
+	this.node.submit = this.submit.bind(this);
+};
+Widgets.adapters.Form.prototype = Object.create(Widgets.AbstractAdapter.prototype);
+Widgets.adapters.Form.prototype.constructor = Widgets.adapters.Form;
 
-Widgets.AbstractAdapter.prototype.unweaken = function () { };
+Widgets.adapters.Form.prototype.onSubmit = function (e) {
+	if (e.defaultPrevented) return;
+	var undodge = this.dodge();
+	if (undodge) setTimeout(undodge, 0);
+};
 
-Widgets.AbstractAdapter.prototype.updateContent = function () { };
+Widgets.adapters.Form.prototype.submit = function (e) {
+	var undodge = this.dodge();
+	this.submitOrig.call(this.node);
+	if (undodge) Compat.afterSubmit(undodge);
+};
+
+Widgets.adapters.Form.prototype.dodge = function () {
+	var undodges = [];
+	for (var i = 0; i < this.node.elements.length; i++) {
+		var elem = this.node.elements[i];
+		if ('zerokitDodge' in elem) undodges.push(elem.zerokitDodge());
+	}
+	if (!undodges.length) return null;
+	return function () {
+		for (var i = 0; i < undodges.length; i++) {
+			undodges[i]();
+		}
+	};
+};
 
 Widgets.adapters.Input = function (e) {
 	Widgets.AbstractAdapter.call(this, e);
 	this.publicValue = this.node.value;
 	this.node.value = Rewriter.processString(this.node.value);
+	this.node.zerokitDodge = this.dodge.bind(this);
+	this.node.dataset.zerokitStyle = 'widget';
 	Object.defineProperty(this.node, 'value', {
 		get: this.valueGetter.bind(this),
 		set: this.valueSetter.bind(this)
 	});
-	this.node.addEventListener('input', this.onInput.bind(this), true); // lame attempt to get ours to go first
-	if (this.node.form && this.node.name) {
-		this.shadow = document.createElement('input');
-		this.shadow.type = 'hidden';
-		this.shadow.name = this.node.name;
-		this.shadow.value = this.publicValue;
-		if (!this.node.form.id) this.node.form.id = Widgets.getId('form');
-		this.shadow.setAttribute('form', this.node.form.id);
-		Island.container.appendChild(this.shadow);
-		this.node.name = '';
-	} else {
-		this.shadow = null;
-	}
+	// caveat: capture event listeners registered after this will not have updated value
+	this.node.addEventListener('input', this.onInput.bind(this), true);
 };
 Widgets.adapters.Input.prototype = Object.create(Widgets.AbstractAdapter.prototype);
 Widgets.adapters.Input.prototype.constructor = Widgets.adapters.Input;
-
-Widgets.adapters.Input.prototype.weaken = function () {
-	if (this.shadow) Island.container.removeChild(this.shadow);
-};
-
-Widgets.adapters.Input.prototype.unweaken = function () {
-	if (this.shadow) Island.container.appendChild(this.shadow);
-};
 
 Widgets.adapters.Input.prototype.valueProp = Compat.inputValue;
 
@@ -370,7 +356,14 @@ Widgets.adapters.Input.prototype.valueSetter = function (v) {
 Widgets.adapters.Input.prototype.onInput = function () {
 	var v = this.valueProp.get.call(this.node);
 	this.publicValue = Codec.encode(Crypto.defaultSuffix, v);
-	if (this.shadow) this.shadow.value = this.publicValue;
+};
+
+Widgets.adapters.Input.prototype.dodge = function () {
+	var privateValue = this.valueProp.get.call(this.node);
+	this.valueProp.set.call(this.node, this.publicValue);
+	return function () {
+		this.valueProp.set.call(this.node, privateValue);
+	}.bind(this);
 };
 
 Widgets.adapters.TextArea = function (e) {
@@ -383,6 +376,8 @@ Widgets.adapters.TextArea.prototype.valueProp = Compat.textAreaValue;
 
 Widgets.adapters.ContentEditable = function (e) {
 	Widgets.AbstractAdapter.call(this, e);
+	this.updateContent = this.updateContent.bind(this);
+	this.node.zerokitUpdateContent = this.updateContent;
 	this.node.contentEditable = 'inherit';
 	this.node.focus = this.focus.bind(this);
 	this.delegate = document.createElement('textarea');
@@ -412,19 +407,20 @@ Widgets.adapters.ContentEditable.prototype.updateContent = function () {
 Widgets.init = function () {
 	var ss = document.createElement('style');
 	ss.textContent =
-		Widgets.SHIMMED_SELECTOR + '{outline:1px solid #c00040!important;outline-offset:-1px!important;}' +
-		Widgets.SHIMMED_SELECTOR + ':focus{outline:2px solid #ff0055!important;}';
-	Island.container.appendChild(ss);
+		'[data-zerokit-style=widget]{outline:1px solid #c00040!important;outline-offset:-1px!important;}' +
+		'[data-zerokit-style=widget]:focus{outline:2px solid #ff0055!important;}';
+	document.head.appendChild(ss);
 	Widgets.delegateStyle = document.createElement('style');
 	Widgets.delegateStyle.textContent =
-		'@host{*{outline:medium none invert!important;}}' +
 		'textarea{display:block;outline:1px solid #c00040!important;outline-offset:-1px!important;margin:0;border:0;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;text-decoration:inherit;resize:none;}' +
 		'textarea:focus{outline:2px solid #ff0055!important;}';
 };
 
 Widgets.createAdapter = function (node) {
 	var tag = node.tagName.toLowerCase();
-	if (tag === 'input') {
+	if (tag === 'form') {
+		return new Widgets.adapters.Form(node);
+	} else if (tag === 'input') {
 		if (node.type === 'text') {
 			// TODO: more heuristics
 			return new Widgets.adapters.Input(node);
@@ -442,7 +438,7 @@ Widgets.createAdapter = function (node) {
 Widgets.updateContent = function (node) {
 	if (node) return false;
 	if (node.nodeType === document.ELEMENT_NODE) {
-		if (node.zerokitShimmed) {
+		if ('zerokitUpdateContent' in node) {
 			node.zerokitUpdateContent();
 			return;
 		}
@@ -451,17 +447,12 @@ Widgets.updateContent = function (node) {
 };
 
 Widgets.onAdd = function (node) {
-	if (node.zerokitShimmed) {
-		node.zerokitUnweaken();
+	if ('zerokitShimmed' in node) {
+		// no need!
 	} else {
-		var adapter = Widgets.createAdapter(node);
-		if (adapter) node.zerokitShimmed = true;
-	}
-};
-
-Widgets.onRemove = function (node) {
-	if (node.zerokitShimmed) {
-		node.zerokitWeaken();
+		if (Widgets.createAdapter(node)) {
+			node.zerokitShimmed = true;
+		}
 	}
 };
 
@@ -475,7 +466,7 @@ var Observer = {
 };
 
 Observer.on = function () {
-	Observer.observer.observe(document.body, Observer.OPTIONS);
+	Observer.observer.observe(document.documentElement, Observer.OPTIONS);
 };
 
 Observer.off = function () {
@@ -503,16 +494,6 @@ Observer.onAddedNode = function (target, addedNode) {
 	Rewriter.rewriteMarkup(addedNode);
 };
 
-Observer.onRemovedNode = function (target, removedNode) {
-	// console.log('removedNode', target, removedNode); // %%%
-	if (removedNode.nodeType !== document.ELEMENT_NODE) return;
-	var delegated = removedNode.querySelectorAll(Widgets.SHIMMED_SELECTOR);
-	for (var i = 0; i < delegated.length; i++) {
-		Widgets.onRemove(delegated[i]);
-	}
-	Widgets.onRemove(removedNode);
-}
-
 Observer.callback = function (mutationRecords) {
 	Observer.off();
 	for (var i = 0; i < mutationRecords.length; i++) {
@@ -523,9 +504,6 @@ Observer.callback = function (mutationRecords) {
 			break;
 		case 'childList':
 			Observer.onChildList(mutationRecord.target);
-			for (var j = 0; j < mutationRecord.removedNodes.length; j++) {
-				Observer.onRemovedNode(mutationRecord.target, mutationRecord.removedNodes[j]);
-			}
 			for (var j = 0; j < mutationRecord.addedNodes.length; j++) {
 				Observer.onAddedNode(mutationRecord.target, mutationRecord.addedNodes[j]);
 			}
@@ -536,11 +514,8 @@ Observer.callback = function (mutationRecords) {
 };
 
 Observer.init = function () {
-	if (!document.body) {
-		document.addEventListener('DOMContentLoaded', Observer.init);
-		return;
-	}
-	Observer.onAddedNode(document.documentElement, document.body);
+	if (document.head) Observer.onAddedNode(document.documentElement, document.head);
+	if (document.body) Observer.onAddedNode(document.documentElement, document.body);
 	Observer.observer = new MutationObserver(Observer.callback);
 	Observer.on();
 };
