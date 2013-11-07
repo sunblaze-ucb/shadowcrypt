@@ -259,6 +259,8 @@ Rewriter.repaceCodes = function (codes) {
 		span.zerokitReplaced = true;
 		range.surroundContents(span);
 		var shadow = Compat.createShadowRoot.call(span);
+		shadow.applyAuthorStyles = true;
+		shadow.resetStyleInheritance = false;
 		shadow.appendChild(messageNode);
 	}
 };
