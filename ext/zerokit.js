@@ -341,6 +341,8 @@ Widgets.adapters.Input = function (e) {
 	});
 	// caveat: capture event listeners registered after this will not have updated value
 	this.node.addEventListener('input', this.onInput.bind(this), true);
+	this.node.addEventListener('keydown', this.onKeydown.bind(this), true);
+	this.enabled = true;
 };
 Widgets.adapters.Input.prototype = Object.create(Widgets.AbstractAdapter.prototype);
 Widgets.adapters.Input.prototype.constructor = Widgets.adapters.Input;
@@ -348,7 +350,7 @@ Widgets.adapters.Input.prototype.constructor = Widgets.adapters.Input;
 Widgets.adapters.Input.prototype.valueProp = Compat.inputValue;
 
 Widgets.adapters.Input.prototype.valueGetter = function () {
-	return this.publicValue;
+	return this.enabled ? this.publicValue : this.valueProp.get.call(this.node);
 };
 
 Widgets.adapters.Input.prototype.valueSetter = function (v) {
@@ -359,6 +361,26 @@ Widgets.adapters.Input.prototype.valueSetter = function (v) {
 Widgets.adapters.Input.prototype.onInput = function () {
 	var v = this.valueProp.get.call(this.node);
 	this.publicValue = Codec.encode(Crypto.defaultSuffix, v);
+};
+
+Widgets.adapters.Input.prototype.onKeydown = function (e) {
+	if (e.keyCode === 32 && e.ctrlKey) {
+		e.preventDefault();
+		e.stopPropagation();
+		this.toggle();
+	}
+};
+
+Widgets.adapters.Input.prototype.toggle = function () {
+	if (this.enabled) {
+		this.node.dataset.zerokitStyle = 'disabled-widget';
+		delete this.node.zerokitDodge;
+		this.enabled = false;
+	} else {
+		this.node.dataset.zerokitStyle = 'widget';
+		this.node.zerokitDodge = this.dodge.bind(this);
+		this.enabled = true;
+	}
 };
 
 Widgets.adapters.Input.prototype.dodge = function () {
@@ -384,13 +406,14 @@ Widgets.adapters.ContentEditable = function (e) {
 	this.node.contentEditable = 'inherit';
 	this.node.focus = this.focus.bind(this);
 	this.delegate = document.createElement('textarea');
+	this.delegate.dataset.zerokitStyle = 'widget';
+	this.delegate.style.cssText = 'display:block;margin:0;border:medium none;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;text-decoration:inherit;resize:none;';
 	this.delegate.value = Rewriter.processString(this.node.textContent);
 	this.delegate.addEventListener('input', this.onInput.bind(this));
-	this.shadowRoot = Compat.createShadowRoot.call(this.node);
-	this.shadowRoot.applyAuthorStyles = false;
-	this.shadowRoot.resetStyleInheritance = false;
-	this.shadowRoot.appendChild(Widgets.delegateStyle.cloneNode(true));
-	this.shadowRoot.appendChild(this.delegate);
+	var shadow = Compat.createShadowRoot.call(this.node);
+	shadow.applyAuthorStyles = true;
+	shadow.resetStyleInheritance = false;
+	shadow.appendChild(this.delegate);
 };
 Widgets.adapters.ContentEditable.prototype = Object.create(Widgets.AbstractAdapter.prototype);
 Widgets.adapters.ContentEditable.prototype.constructor = Widgets.adapters.ContentEditable;
@@ -411,12 +434,10 @@ Widgets.init = function () {
 	var ss = document.createElement('style');
 	ss.textContent =
 		'[data-zerokit-style=widget]{outline:1px solid #c00040!important;outline-offset:-1px!important;}' +
-		'[data-zerokit-style=widget]:focus{outline:2px solid #ff0055!important;}';
+		'[data-zerokit-style=widget]:focus{outline:2px solid #ff0055!important;}' +
+		'[data-zerokit-style=disabled-widget]{outline:1px solid #80c000!important;outline-offset:-1px!important;}' +
+		'[data-zerokit-style=disabled-widget]:focus{outline:2px solid #aaff00!important;}';
 	document.head.appendChild(ss);
-	Widgets.delegateStyle = document.createElement('style');
-	Widgets.delegateStyle.textContent =
-		'textarea{display:block;outline:1px solid #c00040!important;outline-offset:-1px!important;margin:0;border:0;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;text-decoration:inherit;resize:none;}' +
-		'textarea:focus{outline:2px solid #ff0055!important;}';
 };
 
 Widgets.createAdapter = function (node) {
