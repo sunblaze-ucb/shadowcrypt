@@ -95,7 +95,7 @@ Scanner.prototype.setEnd = function (range, index) {
 	throw new Error('index out of bounds', index);
 };
 
-Scanner.prototype.sink = function (range) {
+Scanner.prototype.sink = function (range, light) {
 	// 1. sink from offsets to containers
 	if (range.startOffset !== 0) return;
 	if (range.endOffset !== Scanner.getNodeLength(range.endContainer)) return;
@@ -113,15 +113,20 @@ Scanner.prototype.sink = function (range) {
 		endContainer = endContainer.parentNode;
 	}
 
-	// 3. sink from common ancestor to first ancestor with sibling
-	while (ancestor !== this.root) {
-		if (ancestor.previousSibling) break;
-		if (ancestor.nextSibling) break;
-		ancestor = ancestor.parentNode;
-	}
+	if (light) {
+		// 3a. done
+		range.selectNodeContents(ancestor);
+	} else {
+		// 3b. sink from common ancestor to first ancestor with sibling
+		while (ancestor !== this.root) {
+			if (ancestor.previousSibling) break;
+			if (ancestor.nextSibling) break;
+			ancestor = ancestor.parentNode;
+		}
 
-	// 4. done
-	range.selectNode(ancestor);
+		// 4b. done
+		range.selectNode(ancestor);
+	}
 };
 
 var Tags = {
@@ -242,7 +247,8 @@ Rewriter.findCodes = function (node) {
 				messageNode = document.createTextNode(messageText);
 			}
 			scanner.setEnd(range, match.index + match[0].length);
-			if (range.startContainer.parentNode !== range.endContainer.parentNode) throw new Error('aborting suspicious range', range.startContainer.parentNode, range.endContainer.parentNode);
+			scanner.sink(range, true);
+			if (range.startContainer !== range.endContainer) throw new Error('aborting suspicious range', range.startContainer.parentNode, range.endContainer.parentNode);
 			codes.push([range, messageNode]);
 		} catch (e) {
 			console.warn(e);
