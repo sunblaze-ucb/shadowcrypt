@@ -535,7 +535,9 @@ Observer.callback = function (mutationRecords) {
 		case 'childList':
 			Observer.onChildList(mutationRecord.target);
 			for (var j = 0; j < mutationRecord.addedNodes.length; j++) {
-				Observer.onAddedNode(mutationRecord.target, mutationRecord.addedNodes[j]);
+				var addedNode = mutationRecord.addedNodes[j];
+				if (!document.contains(addedNode)) continue;
+				Observer.onAddedNode(mutationRecord.target, addedNode);
 			}
 			break;
 		}
