@@ -409,7 +409,6 @@ Widgets.adapters.ContentEditable = function (e) {
 	Widgets.AbstractAdapter.call(this, e);
 	this.updateContent = this.updateContent.bind(this);
 	this.node.zerokitUpdateContent = this.updateContent;
-	this.node.contentEditable = 'inherit';
 	this.node.focus = this.focus.bind(this);
 	this.delegate = document.createElement('textarea');
 	this.delegate.dataset.zerokitStyle = 'widget';
