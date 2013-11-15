@@ -5,7 +5,7 @@
 
 	"content_scripts": [
 		{
-			"matches": ["http://*/*", "https://*/*", "file://*"],
+			"matches": ["<all_urls>"],
 			"js": ["zerokit.js"],
 			"run_at": "document_idle",
 			"all_frames": true
