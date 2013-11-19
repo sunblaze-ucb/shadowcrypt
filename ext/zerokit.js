@@ -465,7 +465,7 @@ Widgets.createAdapter = function (node) {
 };
 
 Widgets.updateContent = function (node) {
-	if (node) return false;
+	if (!node) return false;
 	if (node.nodeType === document.ELEMENT_NODE) {
 		if ('zerokitUpdateContent' in node) {
 			node.zerokitUpdateContent();
