@@ -1,26 +1,70 @@
-var zerokit = function () {
-
 var Compat = {
-	createShadowRoot: Element.prototype.createShadowRoot,
+	createShadowRoot: function (e) { return e.webkitCreateShadowRoot(); },
 	afterSubmit: function (f) { setTimeout(f, 0); },
-	inputValue: Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value'),
-	textAreaValue: Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')
+	getInnerText: function (e) { return e.innerText; }
 };
 
-Compat.init = function () {
-	if (!Compat.createShadowRoot && Element.prototype.webkitCreateShadowRoot) Compat.createShadowRoot = Element.prototype.webkitCreateShadowRoot;
-	if (!Compat.createShadowRoot) Compat.throwIncompat('Element#createShadowRoot');
-	if (!Compat.inputValue && window.zerokitDefaultAccessor) Compat.inputValue = window.zerokitDefaultAccessor('value');
-	if (!Compat.inputValue) Compat.throwIncompat('HTMLInputElement#value');
-	if (!Compat.textAreaValue && window.zerokitDefaultAccessor) Compat.textAreaValue = window.zerokitDefaultAccessor('value');
-	if (!Compat.textAreaValue) Compat.throwIncompat('HTMLTextAreaElement#value');
+var Content = {};
+
+Content.within = function () {
+	function onSetup(e) {
+		setup(e.target.contentWindow);
+	}
+
+	function onShimProp(e) {
+		var node = e.target;
+		var name = e.detail.name;
+		var value = e.detail.value;
+		Object.defineProperty(node, name, {
+			get: function () {
+				return value;
+			},
+			set: function (v) {
+				value = v;
+				var event = new CustomEvent('zerokit-prop-set-' + name, {detail: value});
+				node.dispatchEvent(event);
+			}
+		});
+		node.addEventListener('zerokit-set-prop-' + name, function (e) {
+			value = e.detail;
+		});
+	}
+
+	function youCantTouchSelectionAnymore() { };
+
+	function setup(win) {
+		win.addEventListener('zerokit-add-listeners', onSetup, true);
+		win.addEventListener('zerokit-shim-prop', onShimProp, true);
+		// caveat: you can't touch selection anymore
+		win.Selection.prototype.removeAllRanges = youCantTouchSelectionAnymore;
+		win.Selection.prototype.addRange = youCantTouchSelectionAnymore;
+	}
+
+	setup(window);
 };
 
-Compat.throwIncompat = function (feature) {
-	throw new Error('zerokit abort: missing feature ' + feature);
+Content.init = function () {
+	var script = document.createElement('script');
+	script.textContent = '(' + Content.within + ')()';
+	document.documentElement.appendChild(script);
 };
 
-Compat.init();
+Content.propagate = function (iframe) {
+	var event = new Event('zerokit-add-listeners', false, false);
+	iframe.dispatchEvent(event);
+};
+
+Content.shim = function (node, name, value, handler) {
+	node.addEventListener('zerokit-prop-set-' + name, handler);
+	var event = new CustomEvent('zerokit-shim-prop', {detail: {name: name, value: value}});
+	node.dispatchEvent(event);
+	return function (v) {
+		var event = new CustomEvent('zerokit-set-prop-' + name, {detail: v});
+		node.dispatchEvent(event);
+	};
+};
+
+Content.init();
 
 // this is from from http://crypto.stanford.edu/sjcl/sjcl.js
 // narrowed down to bitArray, base64, utf8String, aes, and ccm
@@ -30,7 +74,8 @@ var Crypto = {
 	keys: {},
 	defaultSuffix: '',
 	cipher: sjcl.cipher.aes,
-	mode: sjcl.mode.ccm
+	mode: sjcl.mode.ccm,
+	ivLength: 4
 };
 
 Crypto.keys[''] = [0x2d882231, 0x346dfd19, 0x6ed33f4f, 0x4751d2d5];
@@ -42,21 +87,21 @@ Crypto.getKey = function (suffix) {
 
 Crypto.encrypt = function (key, data, adata) {
 	var pt = sjcl.codec.utf8String.toBits(data);
-	var iv = Array.prototype.slice.call(window.crypto.getRandomValues(new Uint32Array(4)));
+	var iv = Array.prototype.slice.call(window.crypto.getRandomValues(new Uint32Array(Crypto.ivLength)));
 	var ct = Crypto.mode.encrypt(new Crypto.cipher(key), pt, iv, sjcl.codec.utf8String.toBits(adata));
 	return sjcl.codec.base64.fromBits(iv.concat(ct));
 };
 
 Crypto.decrypt = function (key, data, adata) {
 	var ct = sjcl.codec.base64.toBits(data);
-	var iv = ct.splice(0, 4);
+	var iv = ct.splice(0, Crypto.ivLength);
 	var pt = Crypto.mode.decrypt(new Crypto.cipher(key), ct, iv, sjcl.codec.utf8String.toBits(adata));
 	return sjcl.codec.utf8String.fromBits(pt);
 };
 
-var Scanner = function (root) {
+var Scanner = function (impl, root) {
 	this.root = root;
-	this.iter = document.createNodeIterator(root, NodeFilter.SHOW_TEXT);
+	this.iter = impl.createNodeIterator(root, NodeFilter.SHOW_TEXT);
 	this.u = 0;
 	this.v = 0;
 	this.next();
@@ -66,7 +111,7 @@ Scanner.getNodeLength = function (node) {
 	// simplified implementation of
 	// http://dom.spec.whatwg.org/#concept-node-length
 	// supporting only Element and CharacterData Nodes
-	if (node.nodeType === document.TYPE_ELEMENT) {
+	if (node.nodeType === Document.TYPE_ELEMENT) {
 		return node.childNodes.length;
 	} else {
 		return node.length;
@@ -147,7 +192,7 @@ Tags.extractTags = function (message) {
 	return tags.join(',');
 };
 
-Tags.readTags = function (scanner, text, match) {
+Tags.readTags = function (impl, scanner, text, match) {
 	var start = match.index + 9 + match[1].length + 1;
 	var end = start + match[2].length;
 	var tags = [];
@@ -156,7 +201,7 @@ Tags.readTags = function (scanner, text, match) {
 		if (comma === -1 || comma > end) comma = end;
 		var tag = text.slice(start, comma);
 		if (!Tags.TAG_TEST_PATTERN.test(tag)) continue;
-		var range = document.createRange();
+		var range = impl.createRange();
 		scanner.setStart(range, start);
 		scanner.setEnd(range, comma);
 		scanner.sink(range);
@@ -166,8 +211,9 @@ Tags.readTags = function (scanner, text, match) {
 	return tags;
 };
 
-Tags.insertTags = function (message, tags) {
-	if (!tags.length) return document.createTextNode(message);
+Tags.insertTags = function (impl, message, tags) {
+	// might have matched CODE_PATTERN[2] but not any TAG_PATTERN
+	if (!tags.length) return impl.createTextNode(message);
 	var frags = [];
 	var map = {};
 	for (var i = 0; i < tags.length; i++) {
@@ -175,18 +221,18 @@ Tags.insertTags = function (message, tags) {
 		map[tags[i][0]] = tags[i][1];
 	}
 	var pattern = new RegExp(frags.join('|'), 'g');
-	var result = document.createDocumentFragment();
+	var result = impl.createDocumentFragment();
 	var last = 0;
 	var match;
 	while (match = pattern.exec(message)) {
 		if (match.index > last) {
-			result.appendChild(document.createTextNode(message.slice(last, match.index)));
+			result.appendChild(impl.createTextNode(message.slice(last, match.index)));
 		}
 		result.appendChild(map[match[0]].cloneNode(true)); // lol chrome defaults to (false)
 		last = match.index + match[0].length;
 	}
 	if (last < message.length) {
-		result.appendChild(document.createTextNode(message.slice(last)));
+		result.appendChild(impl.createTextNode(message.slice(last)));
 	}
 	return result;
 };
@@ -218,37 +264,45 @@ Rewriter.fastFail = function (text) {
 
 Rewriter.checkBlacklist = function (node) {
 	if (!node) return false;
-	if (node.nodeType === document.ELEMENT_NODE) {
-		if ('zerokitRewritten' in node) return true;
+	if (node.nodeType === Document.ELEMENT_NODE) {
+		if ('zerokitReplaced' in node) return true;
 		if ('zerokitUpdateContent' in node) return true;
 		if (node.tagName.toLowerCase() === 'textarea') return true;
 	}
 	return Rewriter.checkBlacklist(node.parentNode);
 };
 
-Rewriter.findCodes = function (node) {
+Rewriter.checkRangeEndpoints = function (range) {
+	var startElement = range.startContainer;
+	if (startElement.nodeType !== Document.ELEMENT_NODE) startElement = startElement.parentNode;
+	var endElement = range.endContainer;
+	if (endElement.nodeType !== Document.ELEMENT_NODE) endElement = endElement.parentNode;
+	return startElement === endElement;
+};
+
+Rewriter.findCodes = function (impl, node) {
 	// caveat: uses comments and processing instructions
 	var text = node.textContent;
 	if (Rewriter.fastFail(text)) return null;
 	var codes = [];
-	var scanner = new Scanner(node);
+	var scanner = new Scanner(impl, node);
 	var match;
 	while (match = Codec.CODE_PATTERN.exec(text)) {
 		try {
-			var range = document.createRange();
+			var range = impl.createRange();
 			scanner.setStart(range, match.index);
 			if (Rewriter.checkBlacklist(range.startContainer)) continue;
 			var messageText = Codec.decode(match[1], match[2], match[3]);
 			var messageNode;
 			if (match[2]) {
-				var tags = Tags.readTags(scanner, text, match);
-				messageNode = Tags.insertTags(messageText, tags);
+				var tags = Tags.readTags(impl, scanner, text, match);
+				messageNode = Tags.insertTags(impl, messageText, tags);
 			} else {
-				messageNode = document.createTextNode(messageText);
+				messageNode = impl.createTextNode(messageText);
 			}
 			scanner.setEnd(range, match.index + match[0].length);
 			scanner.sink(range, true);
-			if (range.startContainer !== range.endContainer) throw new Error('aborting suspicious range', range.startContainer.parentNode, range.endContainer.parentNode);
+			if (!Rewriter.checkRangeEndpoints(range)) throw new Error('aborting suspicious range', range.startContainer.parentNode, range.endContainer.parentNode);
 			codes.push([range, messageNode]);
 		} catch (e) {
 			console.warn(e);
@@ -257,24 +311,24 @@ Rewriter.findCodes = function (node) {
 	return codes;
 };
 
-Rewriter.repaceCodes = function (codes) {
+Rewriter.repaceCodes = function (impl, codes) {
 	for (var i = 0; i < codes.length; i++) {
 		var range = codes[i][0];
 		var messageNode = codes[i][1];
 		// caveat: this doesn't work in <title>
-		var span = document.createElement('span');
+		var span = impl.createElement('span');
 		span.zerokitReplaced = true;
 		range.surroundContents(span);
-		var shadow = Compat.createShadowRoot.call(span);
+		var shadow = Compat.createShadowRoot(span);
 		shadow.applyAuthorStyles = true;
 		shadow.resetStyleInheritance = false;
 		shadow.appendChild(messageNode);
 	}
 };
 
-Rewriter.rewriteMarkup = function (node) {
-	var codes = Rewriter.findCodes(node);
-	if (codes) Rewriter.repaceCodes(codes);
+Rewriter.rewriteMarkup = function (impl, node) {
+	var codes = Rewriter.findCodes(impl, node);
+	if (codes) Rewriter.repaceCodes(impl, codes);
 };
 
 Rewriter.replacer = function (code, suffix, tags, data) {
@@ -291,13 +345,42 @@ Rewriter.processString = function (str) {
 };
 
 var Widgets = {
-	WIDGET_SELECTOR: 'form,input,textarea,[contenteditable]',
-	delegateStyle: null,
+	WIDGET_SELECTOR: 'form,input,textarea,[contenteditable],iframe',
 	adapters: {}
 };
 
 Widgets.AbstractAdapter = function (e) {
 	this.node = e;
+};
+
+Widgets.Styled = function (e) {
+	Widgets.AbstractAdapter.call(this, e);
+	this.enabled = true;
+	this.node.style.outlineOffset = '-1px';
+	this.node.style.outlineWidth = '1px';
+	this.node.style.outlineStyle = 'solid';
+	this.updateStyle();
+};
+Widgets.Styled.prototype = Object.create(Widgets.AbstractAdapter.prototype);
+Widgets.Styled.prototype.constructor = Widgets.Styled;
+
+Widgets.Styled.prototype.enable = function () {
+	this.enabled = true;
+	this.updateStyle();
+};
+
+Widgets.Styled.prototype.disable = function () {
+	this.enabled = false;
+	this.updateStyle();
+};
+
+Widgets.Styled.prototype.toggle = function () {
+	if (this.enabled) this.disable();
+	else this.enable();
+};
+
+Widgets.Styled.prototype.updateStyle = function () {
+	this.node.style.outlineColor = this.enabled ? '#c00040' : '#80c000';
 };
 
 Widgets.adapters.Form = function (e) {
@@ -312,7 +395,7 @@ Widgets.adapters.Form.prototype.constructor = Widgets.adapters.Form;
 Widgets.adapters.Form.prototype.onSubmit = function (e) {
 	if (e.defaultPrevented) return;
 	var undodge = this.dodge();
-	if (undodge) setTimeout(undodge, 0);
+	if (undodge) Compat.afterSubmit(undodge);
 };
 
 Widgets.adapters.Form.prototype.submit = function (e) {
@@ -336,37 +419,23 @@ Widgets.adapters.Form.prototype.dodge = function () {
 };
 
 Widgets.adapters.Input = function (e) {
-	Widgets.AbstractAdapter.call(this, e);
-	this.publicValue = this.node.value;
+	Widgets.Styled.call(this, e);
+	this.setValue = Content.shim(this.node, 'value', this.node.value, this.onValueSet.bind(this));
 	this.node.value = Rewriter.processString(this.node.value);
 	this.node.zerokitDodge = this.dodge.bind(this);
-	this.node.dataset.zerokitStyle = 'widget';
-	Object.defineProperty(this.node, 'value', {
-		get: this.valueGetter.bind(this),
-		set: this.valueSetter.bind(this)
-	});
-	// caveat: capture event listeners registered after this will not have updated value
+	// caveat: capture event listeners registered before this will not have updated value
 	this.node.addEventListener('input', this.onInput.bind(this), true);
 	this.node.addEventListener('keydown', this.onKeydown.bind(this), true);
-	this.enabled = true;
 };
-Widgets.adapters.Input.prototype = Object.create(Widgets.AbstractAdapter.prototype);
+Widgets.adapters.Input.prototype = Object.create(Widgets.Styled.prototype);
 Widgets.adapters.Input.prototype.constructor = Widgets.adapters.Input;
 
-Widgets.adapters.Input.prototype.valueProp = Compat.inputValue;
-
-Widgets.adapters.Input.prototype.valueGetter = function () {
-	return this.enabled ? this.publicValue : this.valueProp.get.call(this.node);
+Widgets.adapters.Input.prototype.onValueSet = function (e) {
+	this.node.value = Rewriter.processString(e.detail);
 };
 
-Widgets.adapters.Input.prototype.valueSetter = function (v) {
-	this.publicValue = v;
-	this.valueProp.set.call(this.node, Rewriter.processString(v));
-};
-
-Widgets.adapters.Input.prototype.onInput = function () {
-	var v = this.valueProp.get.call(this.node);
-	this.publicValue = Codec.encode(Crypto.defaultSuffix, v);
+Widgets.adapters.Input.prototype.onInput = function (e) {
+	this.setValue(this.enabled ? Codec.encode(Crypto.defaultSuffix, this.node.value) : this.node.value);
 };
 
 Widgets.adapters.Input.prototype.onKeydown = function (e) {
@@ -377,23 +446,23 @@ Widgets.adapters.Input.prototype.onKeydown = function (e) {
 	}
 };
 
-Widgets.adapters.Input.prototype.toggle = function () {
-	if (this.enabled) {
-		this.node.dataset.zerokitStyle = 'disabled-widget';
-		delete this.node.zerokitDodge;
-		this.enabled = false;
-	} else {
-		this.node.dataset.zerokitStyle = 'widget';
-		this.node.zerokitDodge = this.dodge.bind(this);
-		this.enabled = true;
-	}
+Widgets.adapters.Input.prototype.enable = function () {
+	Widgets.Styled.prototype.enable.call(this);
+	this.setValue(Codec.encode(Crypto.defaultSuffix, this.node.value));
+	this.node.zerokitDodge = this.dodge.bind(this);
+};
+
+Widgets.adapters.Input.prototype.disable = function () {
+	Widgets.Styled.prototype.disable.call(this);
+	this.setValue(this.node.value);
+	delete this.node.zerokitDodge;
 };
 
 Widgets.adapters.Input.prototype.dodge = function () {
-	var privateValue = this.valueProp.get.call(this.node);
-	this.valueProp.set.call(this.node, this.publicValue);
+	var privateValue = this.node.value;
+	this.node.value = Codec.encode(Crypto.defaultSuffix, this.node.value);
 	return function () {
-		this.valueProp.set.call(this.node, privateValue);
+		this.node.value = privateValue;
 	}.bind(this);
 };
 
@@ -403,46 +472,69 @@ Widgets.adapters.TextArea = function (e) {
 Widgets.adapters.TextArea.prototype = Object.create(Widgets.adapters.Input.prototype);
 Widgets.adapters.TextArea.prototype.constructor = Widgets.adapters.TextArea;
 
-Widgets.adapters.TextArea.prototype.valueProp = Compat.textAreaValue;
-
 Widgets.adapters.ContentEditable = function (e) {
-	Widgets.AbstractAdapter.call(this, e);
+	Widgets.Styled.call(this, e);
 	this.updateContent = this.updateContent.bind(this);
 	this.node.zerokitUpdateContent = this.updateContent;
 	this.node.focus = this.focus.bind(this);
-	this.delegate = document.createElement('textarea');
+	this.node.addEventListener('focus', this.onFocus.bind(this));
+	this.delegate = this.node.ownerDocument.createElement('textarea');
 	this.delegate.dataset.zerokitStyle = 'widget';
-	this.delegate.style.cssText = 'display:block;margin:0;border:medium none;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;text-decoration:inherit;resize:none;';
-	this.delegate.value = Rewriter.processString(this.node.textContent);
+	// caveat: height:100% only works in containers with specified height
+	this.delegate.style.cssText = 'display:block;margin:0;border:medium none;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;text-decoration:inherit;outline:none;';
+	// this.delegate.style.background = 'magenta'; // %%%%
+	this.delegate.value = Rewriter.processString(Compat.getInnerText(this.node));
 	this.delegate.addEventListener('input', this.onInput.bind(this));
-	var shadow = Compat.createShadowRoot.call(this.node);
-	shadow.applyAuthorStyles = true;
+	this.delegate.addEventListener('keyup', Widgets.adapters.ContentEditable.stopEvent);
+	this.delegate.addEventListener('keydown', Widgets.adapters.ContentEditable.stopEvent);
+	this.delegate.addEventListener('keypress', Widgets.adapters.ContentEditable.stopEvent);
+	// note: this empties out innerText
+	var shadow = Compat.createShadowRoot(this.node);
+	shadow.applyAuthorStyles = false;
 	shadow.resetStyleInheritance = false;
 	shadow.appendChild(this.delegate);
 };
-Widgets.adapters.ContentEditable.prototype = Object.create(Widgets.AbstractAdapter.prototype);
+Widgets.adapters.ContentEditable.prototype = Object.create(Widgets.Styled.prototype);
 Widgets.adapters.ContentEditable.prototype.constructor = Widgets.adapters.ContentEditable;
 
-Widgets.adapters.ContentEditable.prototype.focus = function() {
+Widgets.adapters.ContentEditable.stopEvent = function (e) {
+	e.stopPropagation();
+};
+
+Widgets.adapters.ContentEditable.prototype.focus = function () {
 	this.delegate.focus();
 };
 
-Widgets.adapters.ContentEditable.prototype.onInput = function () {
+Widgets.adapters.ContentEditable.prototype.onFocus = function (e) {
+	this.delegate.focus();
+};
+
+Widgets.adapters.ContentEditable.prototype.onInput = function (e) {
 	this.node.textContent = Codec.encode(Crypto.defaultSuffix, this.delegate.value);
 };
 
 Widgets.adapters.ContentEditable.prototype.updateContent = function () {
+	// caveat: this is stuck with the less nice textContent because innerText sees the composed DOM
 	this.delegate.value = Rewriter.processString(this.node.textContent);
 };
 
-Widgets.init = function () {
-	var ss = document.createElement('style');
-	ss.textContent =
-		'[data-zerokit-style=widget]{outline:1px solid #c00040!important;outline-offset:-1px!important;}' +
-		'[data-zerokit-style=widget]:focus{outline:2px solid #ff0055!important;}' +
-		'[data-zerokit-style=disabled-widget]{outline:1px solid #80c000!important;outline-offset:-1px!important;}' +
-		'[data-zerokit-style=disabled-widget]:focus{outline:2px solid #aaff00!important;}';
-	document.head.appendChild(ss);
+Widgets.adapters.IFrame = function (e) {
+	Widgets.AbstractAdapter.call(this, e);
+	e.addEventListener('load', this.onLoad.bind(this));
+	this.onLoad(null);
+};
+Widgets.adapters.IFrame.prototype = Object.create(Widgets.AbstractAdapter.prototype);
+Widgets.adapters.IFrame.prototype.constructor = Widgets.adapters.IFrame;
+
+Widgets.adapters.IFrame.prototype.onLoad = function () {
+	try {
+		// test access first
+		this.node.contentDocument;
+		Content.propagate(this.node);
+		Observer.init(this.node.contentDocument);
+	} catch (e) {
+		// console.warn(e); // %%%
+	}
 };
 
 Widgets.createAdapter = function (node) {
@@ -456,6 +548,8 @@ Widgets.createAdapter = function (node) {
 		}
 	} else if (tag === 'textarea') {
 		return new Widgets.adapters.TextArea(node);
+	} else if (tag === 'iframe') {
+		return new Widgets.adapters.IFrame(node);
 	} else {
 		if (node.contentEditable === 'true') {
 			return new Widgets.adapters.ContentEditable(node);
@@ -465,8 +559,8 @@ Widgets.createAdapter = function (node) {
 };
 
 Widgets.updateContent = function (node) {
-	if (!node) return false;
-	if (node.nodeType === document.ELEMENT_NODE) {
+	if (!node) return;
+	if (node.nodeType === Document.ELEMENT_NODE) {
 		if ('zerokitUpdateContent' in node) {
 			node.zerokitUpdateContent();
 			return;
@@ -494,14 +588,6 @@ var Observer = {
 	observer: null
 };
 
-Observer.on = function () {
-	Observer.observer.observe(document.documentElement, Observer.OPTIONS);
-};
-
-Observer.off = function () {
-	Observer.observer.disconnect();
-};
-
 Observer.onCharacterData = function (target) {
 	// console.log('characterData', target, target.nodeValue); // %%%
 	Widgets.updateContent(target);
@@ -511,51 +597,46 @@ Observer.onChildList = function (target) {
 	Widgets.updateContent(target);
 };
 
-Observer.onAddedNode = function (target, addedNode) {
+Observer.onAddedNode = function (impl, target, addedNode) {
 	// console.log('addedNode', target, addedNode); // %%%
-	if (addedNode.nodeType === document.ELEMENT_NODE) {
+	if (addedNode.nodeType === Document.ELEMENT_NODE) {
 		var widgets = addedNode.querySelectorAll(Widgets.WIDGET_SELECTOR);
 		for (var i = 0; i < widgets.length; i++) {
 			Widgets.onAdd(widgets[i]);
 		}
 		Widgets.onAdd(addedNode);
 	}
-	Rewriter.rewriteMarkup(addedNode);
+	Rewriter.rewriteMarkup(impl, addedNode);
 };
 
-Observer.callback = function (mutationRecords) {
-	Observer.off();
+Observer.callback = function (mutationRecords, observer) {
 	for (var i = 0; i < mutationRecords.length; i++) {
 		var mutationRecord = mutationRecords[i];
+		var target = mutationRecord.target;
+		var impl = target.ownerDocument;
 		switch (mutationRecord.type) {
 		case 'characterData':
-			Observer.onCharacterData(mutationRecord.target);
+			if (!target.ownerDocument.contains(target)) continue;
+			Observer.onCharacterData(target);
 			break;
 		case 'childList':
-			Observer.onChildList(mutationRecord.target);
-			for (var j = 0; j < mutationRecord.addedNodes.length; j++) {
-				var addedNode = mutationRecord.addedNodes[j];
-				if (!document.contains(addedNode)) continue;
-				Observer.onAddedNode(mutationRecord.target, addedNode);
+			Observer.onChildList(target);
+			var addedNodes = mutationRecord.addedNodes;
+			for (var j = 0; j < addedNodes.length; j++) {
+				var addedNode = addedNodes[j];
+				if (!addedNode.ownerDocument.contains(addedNode)) continue;
+				Observer.onAddedNode(impl, target, addedNode);
 			}
 			break;
 		}
 	}
-	Observer.on();
 };
 
-Observer.init = function () {
-	if (document.head) Observer.onAddedNode(document.documentElement, document.head);
-	if (document.body) Observer.onAddedNode(document.documentElement, document.body);
+Observer.init = function (doc) {
+	if (doc.head) Observer.onAddedNode(doc, doc.documentElement, doc.head);
+	if (doc.body) Observer.onAddedNode(doc, doc.documentElement, doc.body);
 	Observer.observer = new MutationObserver(Observer.callback);
-	Observer.on();
+	Observer.observer.observe(doc.documentElement, Observer.OPTIONS);
 };
 
-Widgets.init();
-Observer.init();
-
-};
-
-var o = document.createElement('script');
-o.textContent = '(' + zerokit + ')()';
-document.documentElement.appendChild(o);
+Observer.init(document);
