@@ -423,8 +423,7 @@ Widgets.adapters.Input = function (e) {
 	this.setValue = Content.shim(this.node, 'value', this.node.value, this.onValueSet.bind(this));
 	this.node.value = Rewriter.processString(this.node.value);
 	this.node.zerokitDodge = this.dodge.bind(this);
-	// caveat: capture event listeners registered before this will not have updated value
-	this.node.addEventListener('input', this.onInput.bind(this), true);
+	this.node.zerokitInputEarly = this.onInputEarly.bind(this);
 	this.node.addEventListener('keydown', this.onKeydown.bind(this), true);
 };
 Widgets.adapters.Input.prototype = Object.create(Widgets.Styled.prototype);
@@ -434,7 +433,7 @@ Widgets.adapters.Input.prototype.onValueSet = function (e) {
 	this.node.value = Rewriter.processString(e.detail);
 };
 
-Widgets.adapters.Input.prototype.onInput = function (e) {
+Widgets.adapters.Input.prototype.onInputEarly = function () {
 	this.setValue(this.enabled ? Codec.encode(Crypto.defaultSuffix, this.node.value) : this.node.value);
 };
 
@@ -484,7 +483,7 @@ Widgets.adapters.ContentEditable = function (e) {
 	this.delegate.style.cssText = 'display:block;margin:0;border:medium none;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;text-decoration:inherit;outline:none;';
 	// this.delegate.style.background = 'magenta'; // %%%%
 	this.delegate.value = Rewriter.processString(Compat.getInnerText(this.node));
-	this.delegate.addEventListener('input', this.onInput.bind(this));
+	this.delegate.addEventListener('input', this.onInput.bind(this), true);
 	this.delegate.addEventListener('keyup', Widgets.adapters.ContentEditable.stopEvent);
 	this.delegate.addEventListener('keydown', Widgets.adapters.ContentEditable.stopEvent);
 	this.delegate.addEventListener('keypress', Widgets.adapters.ContentEditable.stopEvent);
@@ -531,9 +530,21 @@ Widgets.adapters.IFrame.prototype.onLoad = function () {
 		// test access first
 		this.node.contentDocument;
 		Content.propagate(this.node);
+		Widgets.init(this.node.contentWindow);
 		Observer.init(this.node.contentDocument);
 	} catch (e) {
 		// console.warn(e); // %%%
+	}
+};
+
+Widgets.init = function (win) {
+	// caveat: capture listeners registered before this will not see updated value
+	win.addEventListener('input', Widgets.onInputEarly, true);
+};
+
+Widgets.onInputEarly = function (e) {
+	if ('zerokitInputEarly' in e.target) {
+		e.target.zerokitInputEarly();
 	}
 };
 
@@ -578,6 +589,8 @@ Widgets.onAdd = function (node) {
 		}
 	}
 };
+
+Widgets.init(window);
 
 var Observer = {
 	OPTIONS: {
