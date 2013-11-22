@@ -319,7 +319,7 @@ Rewriter.findCodes = function (impl, node) {
 			}
 			scanner.setEnd(range, match.index + match[0].length);
 			scanner.sink(range, true);
-			if (!Rewriter.checkRangeEndpoints(range)) throw new Error('aborting suspicious range', range.startContainer.parentNode, range.endContainer.parentNode);
+			if (!Rewriter.checkRangeEndpoints(range)) throw new Error('aborting suspicious range');
 			codes.push([range, messageNode]);
 		} catch (e) {
 			console.warn(e);
