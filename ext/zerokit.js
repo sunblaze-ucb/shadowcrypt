@@ -30,11 +30,22 @@ Content.within = function () {
 		});
 	}
 
+	function onShimMethod(e) {
+		// no args or return value lol
+		var node = e.target;
+		var name = e.detail.name;
+		node[name] = function () {
+			var event = new Event('zerokit-method-call-' + name);
+			node.dispatchEvent(event);
+		};
+	}
+
 	function youCantTouchSelectionAnymore() { };
 
 	function setup(win) {
 		win.addEventListener('zerokit-add-listeners', onSetup, true);
 		win.addEventListener('zerokit-shim-prop', onShimProp, true);
+		win.addEventListener('zerokit-shim-method', onShimMethod, true);
 		// caveat: you can't touch selection anymore
 		win.Selection.prototype.removeAllRanges = youCantTouchSelectionAnymore;
 		win.Selection.prototype.addRange = youCantTouchSelectionAnymore;
@@ -54,7 +65,7 @@ Content.propagate = function (iframe) {
 	iframe.dispatchEvent(event);
 };
 
-Content.shim = function (node, name, value, handler) {
+Content.shimProp = function (node, name, value, handler) {
 	node.addEventListener('zerokit-prop-set-' + name, handler);
 	var event = new CustomEvent('zerokit-shim-prop', {detail: {name: name, value: value}});
 	node.dispatchEvent(event);
@@ -62,6 +73,12 @@ Content.shim = function (node, name, value, handler) {
 		var event = new CustomEvent('zerokit-set-prop-' + name, {detail: v});
 		node.dispatchEvent(event);
 	};
+};
+
+Content.shimMethod = function (node, name, handler) {
+	node.addEventListener('zerokit-method-call-' + name, handler);
+	var event = new CustomEvent('zerokit-shim-method', {detail: {name: name}});
+	node.dispatchEvent(event);
 };
 
 Content.init();
@@ -385,9 +402,8 @@ Widgets.Styled.prototype.updateStyle = function () {
 
 Widgets.adapters.Form = function (e) {
 	Widgets.AbstractAdapter.call(this, e);
-	this.submitOrig = this.node.submit;
 	this.node.addEventListener('submit', this.onSubmit.bind(this));
-	this.node.submit = this.submit.bind(this);
+	Content.shimMethod(this.node, 'submit', this.submit.bind(this));
 };
 Widgets.adapters.Form.prototype = Object.create(Widgets.AbstractAdapter.prototype);
 Widgets.adapters.Form.prototype.constructor = Widgets.adapters.Form;
@@ -400,7 +416,7 @@ Widgets.adapters.Form.prototype.onSubmit = function (e) {
 
 Widgets.adapters.Form.prototype.submit = function (e) {
 	var undodge = this.dodge();
-	this.submitOrig.call(this.node);
+	this.node.submit();
 	if (undodge) Compat.afterSubmit(undodge);
 };
 
@@ -420,7 +436,8 @@ Widgets.adapters.Form.prototype.dodge = function () {
 
 Widgets.adapters.Input = function (e) {
 	Widgets.Styled.call(this, e);
-	this.setValue = Content.shim(this.node, 'value', this.node.value, this.onValueSet.bind(this));
+	this.publicValue = this.node.value;
+	this.setValue = Content.shimProp(this.node, 'value', this.publicValue, this.onValueSet.bind(this));
 	this.node.value = Rewriter.processString(this.node.value);
 	this.node.zerokitDodge = this.dodge.bind(this);
 	this.node.zerokitInputEarly = this.onInputEarly.bind(this);
@@ -430,11 +447,27 @@ Widgets.adapters.Input.prototype = Object.create(Widgets.Styled.prototype);
 Widgets.adapters.Input.prototype.constructor = Widgets.adapters.Input;
 
 Widgets.adapters.Input.prototype.onValueSet = function (e) {
-	this.node.value = Rewriter.processString(e.detail);
+	var cipher = e.detail;
+	var plain = Rewriter.processString(cipher);
+		this.node.value = plain;
+	if (this.enabled) {
+		this.publicValue = cipher;
+	} else {
+		this.publicValue = plain;
+		this.setValue(plain);
+	}
 };
 
 Widgets.adapters.Input.prototype.onInputEarly = function () {
-	this.setValue(this.enabled ? Codec.encode(Crypto.defaultSuffix, this.node.value) : this.node.value);
+	var plain = this.node.value;
+	if (this.enabled) {
+		var cipher = Codec.encode(Crypto.defaultSuffix, plain);
+		this.publicValue = cipher;
+		this.setValue(cipher);
+	} else {
+		this.publicValue = plain;
+		this.setValue(plain);
+	}
 };
 
 Widgets.adapters.Input.prototype.onKeydown = function (e) {
@@ -447,19 +480,24 @@ Widgets.adapters.Input.prototype.onKeydown = function (e) {
 
 Widgets.adapters.Input.prototype.enable = function () {
 	Widgets.Styled.prototype.enable.call(this);
-	this.setValue(Codec.encode(Crypto.defaultSuffix, this.node.value));
+	var plain = this.node.value;
+	var cipher = Codec.encode(Crypto.defaultSuffix, plain);
+	this.publicValue = cipher;
+	this.setValue(cipher);
 	this.node.zerokitDodge = this.dodge.bind(this);
 };
 
 Widgets.adapters.Input.prototype.disable = function () {
 	Widgets.Styled.prototype.disable.call(this);
-	this.setValue(this.node.value);
+	var plain = this.node.value;
+	this.publicValue = plain;
+	this.setValue(plain);
 	delete this.node.zerokitDodge;
 };
 
 Widgets.adapters.Input.prototype.dodge = function () {
 	var privateValue = this.node.value;
-	this.node.value = Codec.encode(Crypto.defaultSuffix, this.node.value);
+	this.node.value = this.publicValue;
 	return function () {
 		this.node.value = privateValue;
 	}.bind(this);
