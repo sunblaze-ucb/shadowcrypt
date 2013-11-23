@@ -703,9 +703,9 @@ Startup.init = function () {
 
 Startup.onGet = function (items) {
 	if (!(Startup.key in items)) throw new Error('origin not configured');
-	var item = items[Startup.key];
-	Crypto.keys = item.keys;
-	Crypto.defaultSuffix = item.defaultSuffix;
+	var site = items[Startup.key];
+	Crypto.keys = site.keys;
+	Crypto.defaultSuffix = site.defaultSuffix;
 
 	Content.init();
 	Widgets.init(window);
