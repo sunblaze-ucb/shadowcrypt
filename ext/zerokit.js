@@ -259,6 +259,7 @@ var Codec = {
 };
 
 Codec.encode = function (suffix, message) {
+	if (message === '') return '';
 	var tags = Tags.extractTags(message);
 	var data = Crypto.encrypt(Crypto.getKey(suffix), message, tags);
 	return '=?zerokit' + suffix + '?' + tags + '?' + data + '?=';
