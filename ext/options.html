@@ -2,16 +2,19 @@
 <title>Key management</title>
 <style>
 body{margin:3em 2em;background-color:#f8f8f8;font-family:Segoe UI,sans-serif;}
-input{margin:0;font-family:Segoe UI,sans-serif;}
-.textInput{box-sizing:border-box;border:1px solid #d0d0d0;border-radius:2px;padding:2px 4px;}
+input{margin:0;font-size:1em;font-family:Segoe UI,sans-serif;}
+.textInput{box-sizing:border-box;box-shadow:0 1px 2px #f0f0f0 inset;border:1px solid #d0d0d0;border-radius:2px;padding:2px 4px;}
 h1{margin:0.5em 0 0.25em;border-bottom:1px solid #d0d0d0;font-weight:inherit;font-size:2em;font-family:Segoe UI Light,Segoe UI,sans-serif;}
 #messageDisplay{position:fixed;top:0;left:0;float:left;margin:1em 2em;padding:2px 7px;z-index:1;}
 .error{background-color:#e0c000;}
-.delete{opacity:0.25;}
+.delete{opacity:0.25;font-size:0.75em;}
 .delete:hover{opacity:1;}
-#importField{width:40em;font-size:1em;}
+.origin a{text-decoration:none;color:inherit;}
+.origin a:hover{color:#0060c0;}
+.origin a:hover:after{color:#d0d0d0;content:"/";}
+#importField{width:40em;}
 #list{width:40em;}
-.deleteSite{float:right;margin-top:13px;margin-right:0;}
+.deleteSite{float:right;margin-top:15px;margin-right:0;}
 .keys{margin:0;padding:0;list-style-type:none;}
 .key{margin:0.5em 0;padding-left:27px;}
 .default{margin-left:-20px;margin-right:7px;}
@@ -20,7 +23,7 @@ h1{margin:0.5em 0 0.25em;border-bottom:1px solid #d0d0d0;font-weight:inherit;fon
 .share{margin:0;font-size:0.75em;}
 .share:before{content:"Share - ";}
 #generateForm{width:40em;}
-#generateForm p{margin:0.5em 0;width:22em;text-align:right;}
+#generateForm p{margin:0.5em 0;width:26em;text-align:right;}
 #generateForm .textInput{margin-left:1em;width:20em;}
 </style>
 <body>

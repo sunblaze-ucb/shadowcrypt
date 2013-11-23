@@ -202,9 +202,9 @@ View.init = function () {
 	// in init() because not all error codes are declared until the bottom
 	View.errorMessages[Model.STORAGE_ERROR] = 'Error saving change';
 	View.errorMessages[Model.ORIGIN_NORMALIZE_ERROR] = 'Website must be specified as an origin';
-	View.errorMessages[Model.SUFFIX_FORMAT_ERROR] = 'Suffix must contain only letters, numbers, and underscores';
+	View.errorMessages[Model.SUFFIX_FORMAT_ERROR] = 'Key name must contain only letters, numbers, and underscores';
 	View.errorMessages[Model.KEY_LENGTH_ERROR] = 'Key must be 128, 192, or 256 bits';
-	View.errorMessages[Model.COLLISION_ERROR] = 'There is already a key registered for that suffix';
+	View.errorMessages[Model.COLLISION_ERROR] = 'You already have a key with that name on that site';
 	View.errorMessages[Model.REMOVE_DEFAULT_ERROR] = 'Cannot delete a site\'s default key';
 	View.errorMessages[Model.KEY_REFERENCE_ERROR] = 'The specified key does not exist';
 	View.errorMessages[Model.SITE_REFERENCE_ERROR] = 'The specified site does not exist';
@@ -262,7 +262,11 @@ View.onAddSite = function (origin, site) {
 	div.appendChild(button);
 	var h1 = document.createElement('h1');
 	h1.className = 'origin';
-	h1.textContent = origin;
+	var a = document.createElement('a');
+	a.href = origin + '/';
+	a.target = '_blank';
+	a.textContent = origin;
+	h1.appendChild(a);
 	div.appendChild(h1);
 	var ul = document.createElement('ul');
 	ul.className = 'keys';
