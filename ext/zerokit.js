@@ -40,7 +40,9 @@ Content.within = function () {
 		};
 	}
 
-	function youCantTouchSelectionAnymore() { };
+	function youCantTouchSelectionAnymore() {
+		console.warn('ignoring selection manipulation');
+	}
 
 	function setup(win) {
 		win.addEventListener('zerokit-add-listeners', onSetup, true);
