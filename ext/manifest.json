@@ -2,7 +2,6 @@
 	"manifest_version": 2,
 	"name": "zerokit injector",
 	"version": "0.2",
-	"default_locale": "en",
 
 	"content_scripts": [
 		{
