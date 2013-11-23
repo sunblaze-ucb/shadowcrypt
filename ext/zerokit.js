@@ -514,23 +514,30 @@ Widgets.adapters.ContentEditable = function (e) {
 	var impl = this.node.ownerDocument;
 	this.delegate = impl.createElement('textarea');
 	this.delegate.dataset.zerokitStyle = 'widget';
-	// caveat: height:100% only works in containers with specified height
-	this.delegate.style.cssText = 'display:block;margin:0;border:medium none;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;text-decoration:inherit;outline:none;';
-	// this.delegate.style.background = 'magenta'; // %%%%
+	this.delegate.style.cssText = 'display:block;margin:0;border:medium none;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;text-decoration:inherit;outline:none;resize:none;';
 	this.delegate.value = Rewriter.processString(Compat.getInnerText(this.node));
 	this.delegate.addEventListener('input', this.onInput.bind(this), true);
 	this.delegate.addEventListener('keyup', Widgets.adapters.ContentEditable.stopEvent);
 	this.delegate.addEventListener('keydown', Widgets.adapters.ContentEditable.stopEvent);
 	this.delegate.addEventListener('keypress', Widgets.adapters.ContentEditable.stopEvent);
 
-	// if this is the <body>, maximize height, which caveat: might be undesirable
+	// set explicit height for 100% to work, which caveat: might be undesirable
+	var style = impl.defaultView.getComputedStyle(this.node);
 	if (this.node === impl.body) {
-		var margin = impl.defaultView.getComputedStyle('margin');
+		// if this is the <body>, maximize height
+		var margin = style.margin;
 		this.node.style.margin = '0';
 		this.delegate.style.margin = margin;
 		impl.documentElement.style.height = '100%';
 		this.node.style.boxSizing = 'border-box';
 		this.node.style.height = '100%';
+	} else if (style.height === 'auto') {
+		var offsetHeight = this.node.offsetHeight;
+		if (offsetHeight > 0) {
+			// lock in current height
+			this.node.style.boxSizing = 'border-box';
+			this.node.style.height = offsetHeight + 'px';
+		}
 	}
 
 	// note: this empties out innerText

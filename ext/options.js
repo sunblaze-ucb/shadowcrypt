@@ -252,14 +252,6 @@ View.onAddSite = function (origin, site) {
 	var div = document.createElement('div');
 	div.id = 'site-' + origin;
 	div.className = 'site';
-	var button = document.createElement('input');
-	button.type = 'button';
-	button.className = 'delete deleteSite';
-	button.value = 'Delete';
-	button.addEventListener('click', function (e) {
-		Controller.removeSite(origin);
-	});
-	div.appendChild(button);
 	var h1 = document.createElement('h1');
 	h1.className = 'origin';
 	var a = document.createElement('a');
@@ -267,6 +259,14 @@ View.onAddSite = function (origin, site) {
 	a.target = '_blank';
 	a.textContent = origin;
 	h1.appendChild(a);
+	var button = document.createElement('input');
+	button.type = 'button';
+	button.className = 'delete deleteSite';
+	button.value = 'Delete';
+	button.addEventListener('click', function (e) {
+		Controller.removeSite(origin);
+	});
+	h1.appendChild(button);
 	div.appendChild(h1);
 	var ul = document.createElement('ul');
 	ul.className = 'keys';
