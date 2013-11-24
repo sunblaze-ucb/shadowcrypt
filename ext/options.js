@@ -46,14 +46,10 @@ Model.init = function (onAddSite, onAddKey, onError) {
 };
 
 Model.validateOrigin = function (origin, onError) {
-	var url;
-	try {
-		var url = new URL(origin + '/');
-	} catch (e) {
-		onError(Model.ORIGIN_NORMALIZE_ERROR);
-		return true;
-	}
-	if (url.origin !== origin) {
+	// URL constructor doesn't work before Chrome 32
+	var a = document.createElement('a');
+	a.href = origin + '/';
+	if (a.origin !== origin) {
 		onError(Model.ORIGIN_NORMALIZE_ERROR);
 		return true;
 	}
