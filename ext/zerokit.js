@@ -520,7 +520,8 @@ Widgets.adapters.ContentEditable = function (e) {
 	var impl = this.node.ownerDocument;
 	this.delegate = impl.createElement('textarea');
 	this.delegate.dataset.zerokitStyle = 'widget';
-	this.delegate.style.cssText = 'display:block;margin:0;border:medium none;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;text-decoration:inherit;outline:none;resize:none;';
+	// caveat: height:100% only works when the parent has explicit height
+	this.delegate.style.cssText = 'display:block;margin:0;border:medium none;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;outline:none;resize:none;';
 	this.delegate.value = Rewriter.processString(Compat.getInnerText(this.node));
 	this.delegate.addEventListener('input', this.onInput.bind(this), true);
 	this.delegate.addEventListener('keyup', Widgets.adapters.ContentEditable.stopEvent);
