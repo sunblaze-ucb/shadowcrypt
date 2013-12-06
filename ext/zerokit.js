@@ -68,7 +68,9 @@ Content.propagate = function (iframe) {
 };
 
 Content.shimProp = function (node, name, value, handler) {
-	node.addEventListener('zerokit-prop-set-' + name, handler);
+	node.addEventListener('zerokit-prop-set-' + name, function (e) {
+		handler(e.detail);
+	});
 	var event = new CustomEvent('zerokit-shim-prop', {detail: {name: name, value: value}});
 	node.dispatchEvent(event);
 	return function (v) {
@@ -78,7 +80,9 @@ Content.shimProp = function (node, name, value, handler) {
 };
 
 Content.shimMethod = function (node, name, handler) {
-	node.addEventListener('zerokit-method-call-' + name, handler);
+	node.addEventListener('zerokit-method-call-' + name, function (e) {
+		handler();
+	});
 	var event = new CustomEvent('zerokit-shim-method', {detail: {name: name}});
 	node.dispatchEvent(event);
 };
@@ -413,7 +417,7 @@ Widgets.adapters.Form.prototype.onSubmit = function (e) {
 	if (undodge) Compat.afterSubmit(undodge);
 };
 
-Widgets.adapters.Form.prototype.submit = function (e) {
+Widgets.adapters.Form.prototype.submit = function () {
 	var undodge = this.dodge();
 	this.node.submit();
 	if (undodge) Compat.afterSubmit(undodge);
@@ -445,8 +449,8 @@ Widgets.adapters.Input = function (e) {
 Widgets.adapters.Input.prototype = Object.create(Widgets.Styled.prototype);
 Widgets.adapters.Input.prototype.constructor = Widgets.adapters.Input;
 
-Widgets.adapters.Input.prototype.onValueSet = function (e) {
-	var cipher = e.detail;
+Widgets.adapters.Input.prototype.onValueSet = function (v) {
+	var cipher = v;
 	var plain = Rewriter.processString(cipher);
 		this.node.value = plain;
 	if (this.enabled) {
