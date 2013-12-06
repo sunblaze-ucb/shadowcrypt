@@ -58,7 +58,7 @@ Content.within = function () {
 
 Content.init = function () {
 	var script = document.createElement('script');
-	script.textContent = '(' + Content.within + ')()';
+	script.textContent = '(' + Content.within + ')();';
 	document.documentElement.appendChild(script);
 };
 
