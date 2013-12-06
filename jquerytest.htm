@@ -6,6 +6,7 @@
 <input id="useintercept" type="checkbox">
 <input type="submit" name="submitter" value="valid">
 <input type="button" value="submit()" onclick="this.form.submit();">
+<input type="button" value="secret submit()" onclick="secretSubmit();">
 </form>
 <script>
 document.getElementsByTagName('form')[0].addEventListener('submit', function (e) {
@@ -14,4 +15,17 @@ document.getElementsByTagName('form')[0].addEventListener('submit', function (e)
 		console.log(JSON.stringify($(e.target).serializeArray()));
 	}
 });
+function secretSubmit() {
+	var i = document.getElementsByName('secret')[0];
+	var oldForm = i.parentNode;
+	var f = document.createElement('form');
+	f.method = 'post';
+	f.action = 'http://echo.opera.com/';
+	f.appendChild(i);
+	f.submit();
+	setTimeout(function () {
+		console.log('this never runs');
+		oldForm.insertBefore(i, oldForm.firstChild);
+	}, 0);
+}
 </script>
