@@ -528,17 +528,18 @@ Widgets.adapters.ContentEditable = function (e) {
 	this.delegate.addEventListener('keydown', Widgets.adapters.ContentEditable.stopEvent);
 	this.delegate.addEventListener('keypress', Widgets.adapters.ContentEditable.stopEvent);
 
-	// set explicit height for 100% to work, which caveat: might be undesirable
-	var style = impl.defaultView.getComputedStyle(this.node);
+	// set explicit height, which caveat: might be undesirable
 	if (this.node === impl.body) {
 		// if this is the <body>, maximize height
+		var style = impl.defaultView.getComputedStyle(this.node);
 		var margin = style.margin;
 		this.node.style.margin = '0';
-		this.delegate.style.margin = margin;
+		this.delegate.style.boxSizing = 'border-box';
+		this.delegate.style.padding = margin;
 		impl.documentElement.style.height = '100%';
 		this.node.style.boxSizing = 'border-box';
 		this.node.style.height = '100%';
-	} else if (style.height === 'auto') {
+	} else {
 		var offsetHeight = this.node.offsetHeight;
 		if (offsetHeight > 0) {
 			// lock in current height
