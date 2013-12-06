@@ -281,9 +281,10 @@ View.onAddKey = function (origin, suffix, isDefault, key) {
 	var li = document.createElement('li');
 	li.id = 'key-' + origin + '/' + suffix;
 	li.className = 'key';
+	var label = document.createElement('label');
+	label.className = 'default';
 	var radio = document.createElement('input');
 	radio.type = 'radio';
-	radio.className = 'default';
 	radio.name = origin;
 	radio.value = suffix;
 	radio.checked = isDefault;
@@ -291,11 +292,12 @@ View.onAddKey = function (origin, suffix, isDefault, key) {
 		e.preventDefault();
 		Controller.setDefault(origin, suffix);
 	});
-	li.appendChild(radio);
+	label.appendChild(radio);
 	var span = document.createElement('span');
 	span.className = 'suffix';
 	span.textContent = suffix;
-	li.appendChild(span);
+	label.appendChild(span);
+	li.appendChild(label);
 	var button = document.createElement('input');
 	button.type = 'button';
 	button.className = 'delete deleteKey';
@@ -318,7 +320,7 @@ View.onRemoveKey = function (origin, suffix) {
 
 View.onSetDefault = function (origin, suffix) {
 	var li = document.getElementById('key-' + origin + '/' + suffix);
-	var radio = li.querySelector('.default');
+	var radio = li.querySelector('.default input');
 	radio.checked = true;
 };
 
