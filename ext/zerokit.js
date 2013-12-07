@@ -40,8 +40,16 @@ Content.within = function () {
 		};
 	}
 
-	function youCantTouchSelectionAnymore() {
-		console.warn('ignoring selection manipulation');
+	function notInContentEditable(win, selection) {
+		return win.document.activeElement.contentEditable !== 'true';
+	}
+
+	function gateMethodProto(proto, methodName, predicate) {
+		var orig = proto[methodName];
+		proto[methodName] = function () {
+			if (predicate(this)) return orig.apply(this, arguments);
+			else console.warn('ignoring method ' + methodName);
+		};
 	}
 
 	function setup(win) {
@@ -49,8 +57,8 @@ Content.within = function () {
 		win.addEventListener('zerokit-shim-prop', onShimProp, true);
 		win.addEventListener('zerokit-shim-method', onShimMethod, true);
 		// caveat: you can't touch selection anymore
-		win.Selection.prototype.removeAllRanges = youCantTouchSelectionAnymore;
-		win.Selection.prototype.addRange = youCantTouchSelectionAnymore;
+		gateMethodProto(win.Selection.prototype, 'removeAllRanges', notInContentEditable.bind(null, win));
+		gateMethodProto(win.Selection.prototype, 'addRange', notInContentEditable.bind(null, win));
 	}
 
 	setup(window);
@@ -717,7 +725,7 @@ Startup.init = function () {
 };
 
 Startup.onGet = function (items) {
-	if (!(Startup.key in items)) throw new Error('origin not configured');
+	if (!(Startup.key in items)) throw new Error('origin not configured: ' + window.location.origin);
 	var site = items[Startup.key];
 	Crypto.keys = site.keys;
 	Crypto.defaultSuffix = site.defaultSuffix;
