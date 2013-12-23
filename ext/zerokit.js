@@ -1,7 +1,8 @@
 var Compat = {
 	createShadowRoot: function (e) { return e.webkitCreateShadowRoot(); },
 	afterSubmit: function (f) { setTimeout(f, 0); },
-	getInnerText: function (e) { return e.innerText; }
+	getInnerText: function (e) { return e.innerText; },
+	matches: function (e, s) { return e.webkitMatchesSelector(s); }
 };
 
 var Content = {};
@@ -374,6 +375,7 @@ Rewriter.processString = function (str) {
 
 var Widgets = {
 	WIDGET_SELECTOR: 'form,input,textarea,[contenteditable],iframe',
+	excludeSelector: null,
 	adapters: {}
 };
 
@@ -527,7 +529,6 @@ Widgets.adapters.ContentEditable = function (e) {
 
 	var impl = this.node.ownerDocument;
 	this.delegate = impl.createElement('textarea');
-	this.delegate.dataset.zerokitStyle = 'widget';
 	// caveat: height:100% only works when the parent has explicit height
 	this.delegate.style.cssText = 'display:block;margin:0;border:medium none;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;outline:none;resize:none;';
 	this.delegate.value = Rewriter.processString(Compat.getInnerText(this.node));
@@ -646,13 +647,9 @@ Widgets.updateContent = function (node) {
 };
 
 Widgets.onAdd = function (node) {
-	if ('zerokitShimmed' in node) {
-		// no need!
-	} else {
-		if (Widgets.createAdapter(node)) {
-			node.zerokitShimmed = true;
-		}
-	}
+	if ('zerokitShimmed' in node) return;
+	if (Widgets.excludeSelector && Compat.matches(node, Widgets.excludeSelector)) return;
+	if (Widgets.createAdapter(node)) node.zerokitShimmed = true;
 };
 
 var Observer = {
@@ -729,6 +726,7 @@ Startup.onGet = function (items) {
 	var site = items[Startup.key];
 	Crypto.keys = site.keys;
 	Crypto.defaultSuffix = site.defaultSuffix;
+	if (site.excludeSelector) Widgets.excludeSelector = site.excludeSelector;
 
 	Content.init();
 	Widgets.init(window);
