@@ -102,7 +102,6 @@ var sjcl={cipher:{},hash:{},keyexchange:{},mode:{},misc:{},codec:{},exception:{c
 
 var Crypto = {
 	keys: {},
-	defaultSuffix: null,
 	cipher: sjcl.cipher.aes,
 	mode: sjcl.mode.ccm,
 	ivLength: 4
@@ -413,6 +412,37 @@ Widgets.Styled.prototype.updateStyle = function () {
 	this.node.style.outlineColor = this.enabled ? '#c00040' : '#80c000';
 };
 
+Widgets.Encrypted = function (e) {
+	Widgets.Styled.call(this, e);
+};
+Widgets.Encrypted.prototype = Object.create(Widgets.Styled.prototype);
+Widgets.Encrypted.prototype.constructor = Widgets.Encrypted;
+
+Widgets.Encrypted.prototype.suffix = '';
+
+Widgets.Encrypted.prototype.encrypt = function (s) {
+	return Codec.encode(this.suffix, s);
+};
+
+Widgets.Encrypted.prototype.decrypt = function (s) {
+	return Rewriter.processString(s);
+};
+
+Widgets.Delegated = function (e) {
+	Widgets.Encrypted.call(this, e);
+	var impl = this.node.ownerDocument;
+	this.delegate = impl.createElement(this.delegateTagName);
+};
+Widgets.Delegated.prototype = Object.create(Widgets.Encrypted.prototype);
+Widgets.Delegated.prototype.constructor = Widgets.Delegated;
+
+Widgets.Delegated.prototype.activateDelegate = function() {
+	var shadow = Compat.createShadowRoot(this.node);
+	shadow.applyAuthorStyles = false;
+	shadow.resetStyleInheritance = false;
+	shadow.appendChild(this.delegate);
+};
+
 Widgets.adapters.Form = function (e) {
 	Widgets.AbstractAdapter.call(this, e);
 	this.node.addEventListener('submit', this.onSubmit.bind(this));
@@ -448,20 +478,20 @@ Widgets.adapters.Form.prototype.dodge = function () {
 };
 
 Widgets.adapters.Input = function (e) {
-	Widgets.Styled.call(this, e);
+	Widgets.Encrypted.call(this, e);
 	this.publicValue = this.node.value;
 	this.setValue = Content.shimProp(this.node, 'value', this.publicValue, this.onValueSet.bind(this));
-	this.node.value = Rewriter.processString(this.node.value);
+	this.node.value = this.decrypt(this.node.value);
 	this.node.zerokitDodge = this.dodge.bind(this);
 	this.node.zerokitInputEarly = this.onInputEarly.bind(this);
 	this.node.addEventListener('keydown', this.onKeydown.bind(this), true);
 };
-Widgets.adapters.Input.prototype = Object.create(Widgets.Styled.prototype);
+Widgets.adapters.Input.prototype = Object.create(Widgets.Encrypted.prototype);
 Widgets.adapters.Input.prototype.constructor = Widgets.adapters.Input;
 
 Widgets.adapters.Input.prototype.onValueSet = function (v) {
 	var cipher = v;
-	var plain = Rewriter.processString(cipher);
+	var plain = this.decrypt(cipher);
 		this.node.value = plain;
 	if (this.enabled) {
 		this.publicValue = cipher;
@@ -474,7 +504,7 @@ Widgets.adapters.Input.prototype.onValueSet = function (v) {
 Widgets.adapters.Input.prototype.onInputEarly = function () {
 	var plain = this.node.value;
 	if (this.enabled) {
-		var cipher = Codec.encode(Crypto.defaultSuffix, plain);
+		var cipher = this.encrypt(plain);
 		this.publicValue = cipher;
 		this.setValue(cipher);
 	} else {
@@ -494,7 +524,7 @@ Widgets.adapters.Input.prototype.onKeydown = function (e) {
 Widgets.adapters.Input.prototype.enable = function () {
 	Widgets.Styled.prototype.enable.call(this);
 	var plain = this.node.value;
-	var cipher = Codec.encode(Crypto.defaultSuffix, plain);
+	var cipher = this.encrypt(plain);
 	this.publicValue = cipher;
 	this.setValue(cipher);
 	this.node.zerokitDodge = this.dodge.bind(this);
@@ -523,15 +553,14 @@ Widgets.adapters.TextArea.prototype = Object.create(Widgets.adapters.Input.proto
 Widgets.adapters.TextArea.prototype.constructor = Widgets.adapters.TextArea;
 
 Widgets.adapters.ContentEditable = function (e) {
-	Widgets.Styled.call(this, e);
+	Widgets.Delegated.call(this, e);
 	this.node.zerokitUpdateContent = this.updateContent.bind(this);
 	this.node.addEventListener('focus', this.onFocus.bind(this));
 
 	var impl = this.node.ownerDocument;
-	this.delegate = impl.createElement('textarea');
 	// caveat: height:100% only works when the parent has explicit height
 	this.delegate.style.cssText = 'display:block;margin:0;border:medium none;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;outline:none;resize:none;';
-	this.delegate.value = Rewriter.processString(Compat.getInnerText(this.node));
+	this.delegate.value = this.decrypt(Compat.getInnerText(this.node));
 	this.delegate.addEventListener('input', this.onInput.bind(this), true);
 	this.delegate.addEventListener('keyup', Widgets.adapters.ContentEditable.stopEvent);
 	this.delegate.addEventListener('keydown', Widgets.adapters.ContentEditable.stopEvent);
@@ -558,13 +587,12 @@ Widgets.adapters.ContentEditable = function (e) {
 	}
 
 	// note: this empties out innerText
-	var shadow = Compat.createShadowRoot(this.node);
-	shadow.applyAuthorStyles = false;
-	shadow.resetStyleInheritance = false;
-	shadow.appendChild(this.delegate);
+	this.activateDelegate();
 };
-Widgets.adapters.ContentEditable.prototype = Object.create(Widgets.Styled.prototype);
+Widgets.adapters.ContentEditable.prototype = Object.create(Widgets.Delegated.prototype);
 Widgets.adapters.ContentEditable.prototype.constructor = Widgets.adapters.ContentEditable;
+
+Widgets.adapters.ContentEditable.prototype.delegateTagName = 'textarea';
 
 Widgets.adapters.ContentEditable.stopEvent = function (e) {
 	e.stopPropagation();
@@ -575,12 +603,12 @@ Widgets.adapters.ContentEditable.prototype.onFocus = function (e) {
 };
 
 Widgets.adapters.ContentEditable.prototype.onInput = function (e) {
-	this.node.textContent = Codec.encode(Crypto.defaultSuffix, this.delegate.value);
+	this.node.textContent = this.encrypt(this.delegate.value);
 };
 
 Widgets.adapters.ContentEditable.prototype.updateContent = function () {
 	// caveat: this is stuck with the less nice textContent because innerText sees the composed DOM
-	this.delegate.value = Rewriter.processString(this.node.textContent);
+	this.delegate.value = this.decrypt(this.node.textContent);
 };
 
 Widgets.adapters.IFrame = function (e) {
@@ -725,7 +753,7 @@ Startup.onGet = function (items) {
 	if (!(Startup.key in items)) throw new Error('origin not configured: ' + window.location.origin);
 	var site = items[Startup.key];
 	Crypto.keys = site.keys;
-	Crypto.defaultSuffix = site.defaultSuffix;
+	Widgets.Encrypted.prototype.suffix = site.defaultSuffix;
 	if (site.excludeSelector) Widgets.excludeSelector = site.excludeSelector;
 
 	Content.init();
