@@ -39,7 +39,7 @@ Model.init = function (onAddSite, onAddKey, onError) {
 			Model.db[origin] = site;
 			onAddSite(origin, site);
 			for (var suffix in site.keys) {
-				onAddKey(origin, suffix, suffix === site.defaultSuffix, site.keys[suffix]);
+				onAddKey(origin, suffix, suffix === site.defaultSuffix, site.keys[suffix].key, site.keys[suffix].color);
 			}
 		}
 	});
@@ -80,27 +80,29 @@ Model.add = function (origin, suffix, key, onAddSite, onAddKey, onSuccess, onErr
 	if (Model.validateOrigin(origin, onError)) return;
 	if (Model.validateSuffix(suffix, onError)) return;
 	if (Model.validateKey(key, onError)) return;
+	var color = 'rgb(192, 0, 46)';
 	if (origin in Model.db) {
 		var site = Model.db[origin];
 		if (suffix in site.keys) {
 			onError(Model.COLLISION_ERROR);
 		} else {
-			site.keys[suffix] = key;
+			site.keys[suffix] = {key: key, color: color};
 			var items = {};
 			items['origin-' + origin] = site;
 			chrome.storage.sync.set(items, function () {
 				if (Model.checkStorageError(onError)) {
 					delete site.keys[suffix];
 				} else {
-					onAddKey(origin, suffix, false, key);
+					onAddKey(origin, suffix, false, key, color);
 					onSuccess();
 				}
 			});
 		}
 	} else {
 		var site = {keys: {}, defaultSuffix: null};
-		site.keys[suffix] = key;
+		site.keys[suffix] = {key: key, color: 'rgb(192, 0, 46)'};
 		site.defaultSuffix = suffix;
+		site.rules = [];
 		Model.db[origin] = site;
 		var items = {};
 		items['origin-' + origin] = site;
@@ -109,7 +111,7 @@ Model.add = function (origin, suffix, key, onAddSite, onAddKey, onSuccess, onErr
 				delete Model.db[origin];
 			} else {
 				onAddSite(origin, site);
-				onAddKey(origin, suffix, true, key);
+				onAddKey(origin, suffix, true, key, color);
 				onSuccess();
 			}
 		});
@@ -275,7 +277,7 @@ View.onRemoveSite = function (origin) {
 	div.parentNode.removeChild(div);
 };
 
-View.onAddKey = function (origin, suffix, isDefault, key) {
+View.onAddKey = function (origin, suffix, isDefault, key, color) {
 	var div = document.getElementById('site-' + origin);
 	var ul = div.querySelector('.keys');
 	var li = document.createElement('li');
@@ -295,6 +297,7 @@ View.onAddKey = function (origin, suffix, isDefault, key) {
 	label.appendChild(radio);
 	var span = document.createElement('span');
 	span.className = 'suffix';
+	span.style.color = color;
 	span.textContent = suffix;
 	label.appendChild(span);
 	li.appendChild(label);
