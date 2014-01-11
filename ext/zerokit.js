@@ -3,7 +3,10 @@ var Compat = {
 	deleteShadowRootProp: function (e) { Content.deleteProp(e, 'webkitShadowRoot'); },
 	afterSubmit: function (f) { setTimeout(f, 0); },
 	getInnerText: function (e) { return e.innerText; },
-	matches: function (e, s) { return e.webkitMatchesSelector(s); }
+	matches: function (e, s) { return e.webkitMatchesSelector(s); },
+	transform: '-webkit-transform',
+	transformProp: 'WebkitTransform',
+	transformOrigin: '-webkit-transform-origin'
 };
 
 var Content = {};
@@ -472,15 +475,17 @@ Rewriter.repaceCodes = function (impl, codes) {
 		var range = codes[i][0];
 		var color = codes[i][1];
 		var messageNode = codes[i][2];
+		var highlight = impl.createElement('span');
+		highlight.style.backgroundColor = 'rgba(192,0,64,0.125)'; // %%%
+		highlight.appendChild(messageNode);
 		// caveat: this doesn't work in <title>
 		var span = impl.createElement('span');
 		span.zerokitReplaced = true;
-		span.style.backgroundColor = 'rgba(' + color.slice(4, -1) + ', 0.125)';
 		range.surroundContents(span);
-		var shadow = Compat.createShadowRoot(span);
-		shadow.applyAuthorStyles = true;
-		shadow.resetStyleInheritance = false;
-		shadow.appendChild(messageNode);
+		var shadowRoot = Compat.createShadowRoot(span);
+		shadowRoot.applyAuthorStyles = true;
+		shadowRoot.resetStyleInheritance = false;
+		shadowRoot.appendChild(highlight);
 		Compat.deleteShadowRootProp(span);
 		// we'll need to prevent olderShadowRoot when it gets implemented
 	}
@@ -514,21 +519,8 @@ Widgets.AbstractAdapter = function (e) {
 	this.node = e;
 };
 
-Widgets.Styled = function (e) {
-	Widgets.AbstractAdapter.call(this, e);
-	this.node.style.outlineOffset = '-1px';
-	this.node.style.outlineWidth = '1px';
-	this.node.style.outlineStyle = 'solid';
-};
-Widgets.Styled.prototype = Object.create(Widgets.AbstractAdapter.prototype);
-Widgets.Styled.prototype.constructor = Widgets.Styled;
-
-Widgets.Styled.prototype.setColor = function (color) {
-	this.node.style.outlineColor = color;
-};
-
 Widgets.Encrypted = function (e, o) {
-	Widgets.Styled.call(this, e);
+	Widgets.AbstractAdapter.call(this, e);
 	if ('mode' in o) {
 		if (o.mode in Tags.modes) {
 			this.mode = Tags.modes[o.mode];
@@ -539,9 +531,8 @@ Widgets.Encrypted = function (e, o) {
 	if ('off' in o) {
 		this.suffix = null;
 	}
-	this.updateColor();
 };
-Widgets.Encrypted.prototype = Object.create(Widgets.Styled.prototype);
+Widgets.Encrypted.prototype = Object.create(Widgets.AbstractAdapter.prototype);
 Widgets.Encrypted.prototype.constructor = Widgets.Encrypted;
 
 Widgets.Encrypted.prototype.mode = Tags.modes.links;
@@ -556,21 +547,12 @@ Widgets.Encrypted.prototype.decrypt = function (s) {
 	return Rewriter.processString(s);
 };
 
-Widgets.Encrypted.prototype.updateColor = function () {
-	if (this.suffix === null) {
-		this.setColor('transparent');
-	} else {
-		this.setColor(Crypto.getColor(this.suffix));
-	}
-};
-
 Widgets.Encrypted.prototype.refreshEncryption = function () {
 	// abstract
 };
 
 Widgets.Encrypted.prototype.setSuffix = function (suffix) {
 	this.suffix = suffix;
-	this.updateColor();
 	this.refreshEncryption();
 };
 
@@ -582,24 +564,249 @@ Widgets.Encrypted.prototype.setMode = function (mode) {
 Widgets.Delegated = function (e, o) {
 	Widgets.Encrypted.call(this, e, o);
 	var impl = this.node.ownerDocument;
-	this.shadowRoot = null;
+	this.shadowContent = impl.createDocumentFragment();
 	this.delegate = impl.createElement(this.delegateTagName);
 	this.node.addEventListener('focus', this.onFocus.bind(this));
 };
 Widgets.Delegated.prototype = Object.create(Widgets.Encrypted.prototype);
 Widgets.Delegated.prototype.constructor = Widgets.Delegated;
 
+Widgets.Delegated.prototype.usePosition = function() {
+	var style = this.node.ownerDocument.defaultView.getComputedStyle(this.node);
+	switch (style.position) {
+	case 'static':
+		this.node.style.position = 'relative';
+		break;
+	}
+};
+
 Widgets.Delegated.prototype.activateDelegate = function() {
-	this.shadowRoot = Compat.createShadowRoot(this.node);
+	var shadowRoot = Compat.createShadowRoot(this.node);
 	Compat.deleteShadowRootProp(this.node);
-	this.shadowRoot.applyAuthorStyles = false;
-	this.shadowRoot.resetStyleInheritance = false;
-	this.shadowRoot.appendChild(this.delegate);
+	shadowRoot.applyAuthorStyles = false;
+	shadowRoot.resetStyleInheritance = false;
+	shadowRoot.appendChild(this.shadowContent);
+	this.shadowContent = null;
 	if (this.node.ownerDocument.activeElement === this.node) this.delegate.focus();
 };
 
 Widgets.Delegated.prototype.onFocus = function (e) {
 	this.delegate.focus();
+};
+
+Widgets.KeyChanger = function (e, o) {
+	Widgets.Delegated.call(this, e, o);
+	if (!Widgets.KeyChanger.initialized) Widgets.KeyChanger.init();
+	this.usePosition();
+
+	var impl = this.node.ownerDocument;
+	var style = impl.createElement('style');
+	style.textContent = Widgets.KeyChanger.css;
+	this.shadowContent.appendChild(style);
+	this.wrapper = Widgets.KeyChanger.appendDiv(impl, this.shadowContent, 'wrapper');
+		this.delegate.className = 'delegate';
+		this.wrapper.appendChild(this.delegate);
+		this.ui = Widgets.KeyChanger.appendDiv(impl, this.wrapper, 'ui');
+			var modal = Widgets.KeyChanger.appendDiv(impl, this.ui, 'ui-modal');
+			modal.addEventListener('click', this.clickModal.bind(this));
+			var background = Widgets.KeyChanger.appendDiv(impl, this.ui, 'ui-background');
+			var labelWrapper = Widgets.KeyChanger.appendDiv(impl, this.ui, 'label-wrapper');
+				this.label = Widgets.KeyChanger.appendDiv(impl, labelWrapper, 'label');
+			var ring = Widgets.KeyChanger.appendDiv(impl, this.ui, 'ring');
+			var lock = Widgets.KeyChanger.appendDiv(impl, this.ui, 'lock');
+			lock.addEventListener('click', this.clickLock.bind(this));
+
+	this.keyCount = 0;
+	this.keyElements = [];
+	this.keyNameElements = [];
+	for (var suffix in Crypto.keys) {
+		var keyWrapper = Widgets.KeyChanger.appendDiv(impl, ring, 'key-wrapper unlocked');
+		var keyNameElement = Widgets.KeyChanger.appendDiv(impl, keyWrapper, 'key-name color-' + Crypto.keys[suffix].color);
+		keyNameElement.textContent = suffix;
+		this.keyNameElements.push(keyNameElement);
+		var keyElement = Widgets.KeyChanger.appendDiv(impl, keyWrapper, 'key color-' + Crypto.keys[suffix].color);
+		keyElement.style[Compat.transformProp] = 'rotate(150deg)';
+		this.keyElements.push(keyElement);
+		keyWrapper.addEventListener('mouseenter', this.enterKeyWrapper.bind(this, this.keyCount, suffix));
+		keyWrapper.addEventListener('mouseleave', this.leaveKeyWrapper.bind(this, this.keyCount, suffix));
+		keyWrapper.addEventListener('click', this.clickKeyWrapper.bind(this, this.keyCount, suffix));
+		this.keyCount++;
+	}
+
+	this.keySpacing = Math.max(10, 50 - 5 * this.keyCount);
+	this.extraSpacing = Math.max(0, 30 - this.keySpacing);
+	var keyRange = (this.keyCount - 1) * this.keySpacing;
+	this.keyOffsetStart = -0.5 * keyRange;
+	this.keyNamesStart = 22 + this.keyOffsetStart;
+	this.positionKeyNames();
+
+	var unlock = Widgets.KeyChanger.appendDiv(impl, ring, 'key-name unlock');
+	unlock.textContent = 'Unlock';
+	unlock.addEventListener('click', this.clickUnlock.bind(this));
+
+	this.keySelectionVisible = false;
+	this.refreshState();
+};
+Widgets.KeyChanger.prototype = Object.create(Widgets.Delegated.prototype);
+Widgets.KeyChanger.prototype.constructor = Widgets.KeyChanger;
+
+Widgets.KeyChanger.initialized = false;
+Widgets.KeyChanger.css = null;
+
+Widgets.KeyChanger.appendDiv = function (impl, container, className) {
+	var div = impl.createElement('div');
+	div.className = className;
+	container.appendChild(div);
+	return div;
+};
+
+Widgets.KeyChanger.init = function (impl) {
+	Widgets.KeyChanger.css =
+		'.delegate{display:block;position:relative;margin:0;border:medium none;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;outline:1px solid transparent;outline-offset:0;}\r\n' +
+		'.delegate:focus{outline-width:2px;}\r\n' +
+		'.ui{position:absolute;bottom:0.625em;right:20px;}\r\n' +
+		'.key-ui.ui{z-index:1;}\r\n' +
+		'.ui-background{position:absolute;width:600px;height:600px;left:-300px;top:-300px;background-image:radial-gradient(closest-side,white 0%,rgba(255,255,255,0.3) 50%,rgba(255,255,255,0) 100%);transition:all ease-in-out 0.2s 0s;opacity:0;visibility:hidden;}\r\n' +
+		'.key-ui .ui-background{opacity:1;visibility:visible;}\r\n' +
+		'.ui-modal{position:fixed;top:0;left:0;bottom:0;right:0;background-color:white;transition:all ease-in-out 0.2s 0s;opacity:0;visibility:hidden;}\r\n' +
+		'.key-ui .ui-modal{opacity:0.5;visibility:visible;}\r\n' +
+		'.label-wrapper{position:absolute;top:12px;transition:all ease-in-out 0.2s 0.5s;opacity:0;visibility:hidden;}\r\n' +
+		'.ui:hover .label-wrapper{transition:all ease-in-out 0.2s 0s;opacity:1;visibility:visible;}\r\n' +
+		'.ui.key-ui .label-wrapper{opacity:0;visibility:hidden;}\r\n' +
+		'.label{position:relative;left:-50%;border:1px solid #cccccc;padding:3px;background-color:white;font:10px sans-serif;white-space:nowrap;}\r\n' +
+		'.wrapper.unlocked .label{display:none;}\r\n' +
+		'.ring{position:absolute;left:-34px;top:-34px;border:2px solid #999999;border-radius:64px;width:64px;height:64px;transition:all ease-in-out 0.2s 0s;' + Compat.transformOrigin + ':50% 50%;' + Compat.transform + ':scale(0,0);opacity:0;}\r\n' +
+		'.key-ui .ring{' + Compat.transform + ':scale(1,1);opacity:1;}\r\n' +
+		'.key{width:40px;height:25px;background-image:url(' + chrome.extension.getURL('Spritesheet-01.png') + ');}\r\n' +
+		'.ring .key{position:absolute;left:55px;top:20px;transition:all ease-in-out 0.2s 0s;' + Compat.transformOrigin + ':-23px 50%;cursor:pointer;}\r\n' +
+		'.key-name{position:absolute;padding:3px;font:500 10px sans-serif;white-space:nowrap;cursor:pointer;transition:all ease-in-out 0.2s 0s;opacity:0.8;}\r\n' +
+		'.key-wrapper:hover .key-name,.key-name.unlock:hover{opacity:1;' + Compat.transform + ':scale(1.2,1.2);}\r\n' +
+		'.key-name.unlock{top:75px;left:12px;color:dimgray;}\r\n' +
+		'.lock{position:absolute;bottom:-20px;left:-20px;width:40px;height:40px;background:-160px -120px url(' + chrome.extension.getURL('Spritesheet-01.png') + ');cursor:pointer;}\r\n' +
+		'.lock:hover,.key-ui .lock{opacity:1;}\r\n' +
+		'\r\n' +
+		'.key.color-1{background-position:0 -25px;}\r\n' +
+		'.key.color-2{background-position:0 -50px;}\r\n' +
+		'.key.color-3{background-position:0 -75px;}\r\n' +
+		'.key.color-4{background-position:0 -100px;}\r\n' +
+		'.key.color-5{background-position:0 -125px;}\r\n' +
+		'.key.color-6{background-position:0 -150px;}\r\n' +
+		'.wrapper.locked-color-0 .lock{background-position:-120px 0;}\r\n' +
+		'.wrapper.locked-color-1 .lock{background-position:-120px -40px;}\r\n' +
+		'.wrapper.locked-color-2 .lock{background-position:-120px -80px;}\r\n' +
+		'.wrapper.locked-color-3 .lock{background-position:-120px -120px;}\r\n' +
+		'.wrapper.locked-color-4 .lock{background-position:-160px 0;}\r\n' +
+		'.wrapper.locked-color-5 .lock{background-position:-160px -40px;}\r\n' +
+		'.wrapper.locked-color-6 .lock{background-position:-160px -80px;}\r\n' +
+		'.wrapper.locked-color-0 .label,.key-name.color-0{color:#339999;}\r\n' +
+		'.wrapper.locked-color-1 .label,.key-name.color-1{color:#336699;}\r\n' +
+		'.wrapper.locked-color-2 .label,.key-name.color-2{color:#666699;}\r\n' +
+		'.wrapper.locked-color-3 .label,.key-name.color-3{color:#ad4977;}\r\n' +
+		'.wrapper.locked-color-4 .label,.key-name.color-4{color:#d1ae4a;}\r\n' +
+		'.wrapper.locked-color-5 .label,.key-name.color-5{color:#996633;}\r\n' +
+		'.wrapper.locked-color-6 .label,.key-name.color-6{color:#666666;}\r\n' +
+		'.wrapper.locked-color-0 .delegate{outline-color:#339999;}\r\n' +
+		'.wrapper.locked-color-1 .delegate{outline-color:#336699;}\r\n' +
+		'.wrapper.locked-color-2 .delegate{outline-color:#666699;}\r\n' +
+		'.wrapper.locked-color-3 .delegate{outline-color:#ad4977;}\r\n' +
+		'.wrapper.locked-color-4 .delegate{outline-color:#d1ae4a;}\r\n' +
+		'.wrapper.locked-color-5 .delegate{outline-color:#996633;}\r\n' +
+		'.wrapper.locked-color-6 .delegate{outline-color:#666666;}\r\n' /* +
+		'.wrapper.locked-color-0 .delegate:focus{box-shadow:inset 0 0 5px #339999;}\r\n' +
+		'.wrapper.locked-color-1 .delegate:focus{box-shadow:inset 0 0 5px #336699;}\r\n' +
+		'.wrapper.locked-color-2 .delegate:focus{box-shadow:inset 0 0 5px #666699;}\r\n' +
+		'.wrapper.locked-color-3 .delegate:focus{box-shadow:inset 0 0 5px #ad4977;}\r\n' +
+		'.wrapper.locked-color-4 .delegate:focus{box-shadow:inset 0 0 5px #d1ae4a;}\r\n' +
+		'.wrapper.locked-color-5 .delegate:focus{box-shadow:inset 0 0 5px #996633;}\r\n' +
+		'.wrapper.locked-color-6 .delegate:focus{box-shadow:inset 0 0 5px #666666;}\r\n' */;
+};
+
+Widgets.KeyChanger.prototype.refreshState = function () {
+	if (this.suffix === null) {
+		this.wrapper.className = 'wrapper unlocked';
+		this.label.textContent = '';
+	} else {
+		this.wrapper.className = 'wrapper locked-color-' + Crypto.getColor(this.suffix);
+		this.label.textContent = 'Encrypted with key ' + this.suffix;
+	}
+};
+
+Widgets.KeyChanger.prototype.setSuffix = function (suffix) {
+	Widgets.Encrypted.prototype.setSuffix.call(this, suffix);
+	this.refreshState();
+};
+
+Widgets.KeyChanger.prototype.positionKeyNames = function () {
+	for (var i = 0; i < this.keyCount; i++) {
+		var top = this.keyNamesStart + this.keySpacing * i;
+		var rotation = (this.keyOffsetStart + i * this.keySpacing) / 180 * Math.PI;
+		var left = 40 * Math.cos(rotation) + 60;
+		this.keyNameElements[i].style.top = top + 'px';
+		this.keyNameElements[i].style.left = left + 'px';
+	}
+};
+
+Widgets.KeyChanger.prototype.rotateKeys = function (option) {
+	for (var i = 0; i < this.keyCount; i++) {
+		var rotation;
+		if (option === 'collapsed') {
+			rotation = 150;
+		} else {
+			rotation = this.keyOffsetStart + this.keySpacing * i;
+			if (option !== 'uniform') {
+				if (i < option) rotation -= this.extraSpacing;
+				else if (i > option) rotation += this.extraSpacing;
+			}
+		}
+		this.keyElements[i].style[Compat.transformProp] = 'rotate(' + rotation + 'deg)';
+	}
+};
+
+Widgets.KeyChanger.prototype.hideKeySelection = function () {
+	this.ui.classList.remove('key-ui');
+	this.rotateKeys('collapsed');
+	this.keySelectionVisible = false;
+};
+
+Widgets.KeyChanger.prototype.showKeySelection = function () {
+	this.ui.classList.add('key-ui');
+	this.rotateKeys('uniform');
+	this.keySelectionVisible = true;
+};
+
+Widgets.KeyChanger.prototype.clickModal = function (e) {
+	this.hideKeySelection();
+	e.stopPropagation();
+	e.preventDefault();
+};
+
+Widgets.KeyChanger.prototype.clickLock = function (e) {
+	if (this.keySelectionVisible)  this.hideKeySelection();
+	else this.showKeySelection();
+	e.stopPropagation();
+	e.preventDefault();
+};
+
+Widgets.KeyChanger.prototype.enterKeyWrapper = function (i, suffix, e) {
+	if (this.keySelectionVisible) this.rotateKeys(i);
+};
+
+Widgets.KeyChanger.prototype.leaveKeyWrapper = function (i, suffix, e) {
+	if (this.keySelectionVisible) this.rotateKeys('uniform');
+};
+
+Widgets.KeyChanger.prototype.clickKeyWrapper = function (i, suffix, e) {
+	this.setSuffix(suffix);
+	this.hideKeySelection();
+	e.stopPropagation();
+	e.preventDefault();
+};
+
+Widgets.KeyChanger.prototype.clickUnlock = function (e) {
+	this.setSuffix(null);
+	this.hideKeySelection();
+	e.stopPropagation();
+	e.preventDefault();
 };
 
 Widgets.adapters.Form = function (e, o) {
@@ -637,11 +844,10 @@ Widgets.adapters.Form.prototype.dodge = function () {
 };
 
 Widgets.adapters.Input = function (e, o) {
-	Widgets.Delegated.call(this, e, o);
+	Widgets.KeyChanger.call(this, e, o);
 	this.setValue = Content.shimProp(this.node, 'value', this.node.value, this.onValueSet.bind(this));
 	this.node.zerokitInputEarly = this.onInputEarly.bind(this);
 
-	this.delegate.style.cssText = 'display:block;margin:0;border:medium none;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;outline:none;';
 	this.delegate.value = this.decrypt(this.node.value);
 	this.delegate.placeholder = this.decrypt(this.node.placeholder);
 	this.delegate.addEventListener('change', this.onChange.bind(this), true);
@@ -649,7 +855,7 @@ Widgets.adapters.Input = function (e, o) {
 
 	this.activateDelegate();
 };
-Widgets.adapters.Input.prototype = Object.create(Widgets.Delegated.prototype);
+Widgets.adapters.Input.prototype = Object.create(Widgets.KeyChanger.prototype);
 Widgets.adapters.Input.prototype.constructor = Widgets.adapters.Input;
 
 Widgets.adapters.Input.prototype.delegateTagName = 'input';
@@ -744,6 +950,7 @@ Widgets.adapters.ContentEditable = function (e, o) {
 	this.delegate.addEventListener('keyup', Widgets.adapters.ContentEditable.stopEvent);
 	this.delegate.addEventListener('keydown', Widgets.adapters.ContentEditable.stopEvent);
 	this.delegate.addEventListener('keypress', Widgets.adapters.ContentEditable.stopEvent);
+	this.shadowContent.appendChild(this.delegate);
 
 	// set explicit height, which caveat: might be undesirable
 	if (this.node === impl.body) {
@@ -767,12 +974,6 @@ Widgets.adapters.ContentEditable = function (e, o) {
 
 	// note: this empties out innerText
 	this.activateDelegate();
-
-	var innerTextReflector = document.createElement('content');
-	var invisible = document.createElement('div');
-	invisible.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;';
-	invisible.appendChild(innerTextReflector);
-	this.shadowRoot.appendChild(invisible);
 };
 Widgets.adapters.ContentEditable.prototype = Object.create(Widgets.Delegated.prototype);
 Widgets.adapters.ContentEditable.prototype.constructor = Widgets.adapters.ContentEditable;
@@ -794,7 +995,8 @@ Widgets.adapters.ContentEditable.prototype.onInput = function (e) {
 };
 
 Widgets.adapters.ContentEditable.prototype.updateContent = function () {
-	var cipher = Compat.getInnerText(this.node);
+	// caveat: this is stuck with textContent, since innerText uses the composed tree
+	var cipher = this.node.textContent;
 	var plain = this.decrypt(cipher);
 	this.delegate.value = plain;
 };
@@ -950,6 +1152,7 @@ Startup.onGet = function (items) {
 	if (!(Startup.key in items)) return;
 	var site = items[Startup.key];
 	Crypto.keys = site.keys;
+	Crypto.keys[''].color = 1; // %%%
 	Widgets.Encrypted.prototype.suffix = site.defaultSuffix;
 	Widgets.rules = Startup.filterRules(site.rules);
 

@@ -13,5 +13,8 @@
 	],
 
 	"options_page": "options.html",
-	"permissions": ["storage"]
+	"permissions": ["storage"],
+	"web_accessible_resources": [
+		"Spritesheet-01.png"
+	]
 }
