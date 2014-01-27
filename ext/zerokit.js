@@ -129,38 +129,33 @@ var Crypto = {
 	ivLength: 4
 };
 
-Crypto.getKey = function (suffix) {
-	if (!(suffix in Crypto.keys)) throw new Error('unknown suffix', suffix);
-	return Crypto.keys[suffix].key;
+Crypto.getKey = function (fingerprint) {
+	if (!(fingerprint in Crypto.keys)) throw new Error('unknown fingerprint', fingerprint);
+	return Crypto.keys[fingerprint];
 };
 
-Crypto.getColor = function (suffix) {
-	if (!(suffix in Crypto.keys)) throw new Error('unknown suffix', suffix);
-	return Crypto.keys[suffix].color;
-};
-
-Crypto.hmac = function (key, data) {
-	var hmac = new sjcl.misc.hmac(key, Crypto.hash);
+Crypto.hmac = function (secret, data) {
+	var hmac = new sjcl.misc.hmac(secret, Crypto.hash);
 	hmac.update(sjcl.codec.utf8String.toBits(data));
 	return sjcl.codec.hex.fromBits(hmac.digest());
 };
 
-Crypto.encrypt = function (key, data, adata) {
+Crypto.encrypt = function (secret, data, adata) {
 	var pt = sjcl.codec.utf8String.toBits(data);
 	var iv = Array.prototype.slice.call(window.crypto.getRandomValues(new Uint32Array(Crypto.ivLength)));
-	var ct = Crypto.mode.encrypt(new Crypto.cipher(key), pt, iv, sjcl.codec.utf8String.toBits(adata));
+	var ct = Crypto.mode.encrypt(new Crypto.cipher(secret), pt, iv, sjcl.codec.utf8String.toBits(adata));
 	return sjcl.codec.base64.fromBits(iv.concat(ct));
 };
 
-Crypto.decrypt = function (key, data, adata) {
+Crypto.decrypt = function (secret, data, adata) {
 	var ct = sjcl.codec.base64.toBits(data);
 	var iv = ct.splice(0, Crypto.ivLength);
-	var pt = Crypto.mode.decrypt(new Crypto.cipher(key), ct, iv, sjcl.codec.utf8String.toBits(adata));
+	var pt = Crypto.mode.decrypt(new Crypto.cipher(secret), ct, iv, sjcl.codec.utf8String.toBits(adata));
 	return sjcl.codec.utf8String.fromBits(pt);
 };
 
-var Bloom = function (key) {
-	this.key = key;
+var Bloom = function (secret) {
+	this.secret = secret;
 	this.bits = {};
 	this.count = 0;
 };
@@ -172,7 +167,7 @@ Bloom.K = 4;
 Bloom.EXTRA_WORD_LENGTH = 8;
 
 Bloom.prototype.hash = function (index, data) {
-	var hmac = new sjcl.misc.hmac(this.key, Crypto.hash);
+	var hmac = new sjcl.misc.hmac(this.secret, Crypto.hash);
 	hmac.update([index]);
 	hmac.update([0]);
 	hmac.update(sjcl.codec.utf8String.toBits(data));
@@ -285,11 +280,11 @@ var Tags = {
 	modes: {}
 };
 
-Tags.modes.none = function (key, message) {
+Tags.modes.none = function (secret, message) {
 	// nothing!
 };
 
-Tags.modes.links = function (key, message) {
+Tags.modes.links = function (secret, message) {
 	var tags = [];
 	var seen = {};
 	var match;
@@ -302,7 +297,7 @@ Tags.modes.links = function (key, message) {
 	return tags;
 };
 
-Tags.modes.words = function (key, message) {
+Tags.modes.words = function (secret, message) {
 	var tags = [];
 	var seen = {};
 	var match;
@@ -311,22 +306,22 @@ Tags.modes.words = function (key, message) {
 		var word = match[0];
 		var name = ':' + word;
 		if (name in seen) continue;
-		var tag = Crypto.hmac(key, word);
+		var tag = Crypto.hmac(secret, word);
 		tags.push(tag);
 		seen[name] = true;
 	}
 	return tags.sort();
 };
 
-Tags.modes.wordsQuery = function (key, message) {
-	return Tags.modes.words(key, message);
+Tags.modes.wordsQuery = function (secret, message) {
+	return Tags.modes.words(secret, message);
 };
 Tags.modes.wordsQuery.queryOnly = true;
 
-Tags.modes.bloom = function (key, message) {
+Tags.modes.bloom = function (secret, message) {
 	var match;
 	var seen = {};
-	var bloom = new Bloom(key);
+	var bloom = new Bloom(secret);
 	var count = 0;
 	while (match = Tags.WORD_PATTERN.exec(message)) {
 		var word = match[0];
@@ -343,7 +338,7 @@ Tags.modes.bloom = function (key, message) {
 };
 
 Tags.readLinks = function (impl, scanner, text, match) {
-	var start = match.index + 11 + match[1].length + match[2].length;
+	var start = match.index + 12 + match[1].length + match[2].length;
 	var end = start + match[3].length;
 	var tags = [];
 	while (start < end) {
@@ -388,29 +383,38 @@ Tags.insertLinks = function (impl, message, tags) {
 };
 
 var Codec = {
-	CODE_PATTERN: /=\?zerokit(\w*)\?([A-Za-z0-9+\/=]*)\?([^?\s]*)\?=/g
+	CODE_PATTERN: /=\?zerokit-(\w*)\?([A-Za-z0-9+\/=]*)\?([^?\s]*)\?=/g
 	// reflect changes in Tags.readLinks
 };
 
-Codec.encode = function (mode, suffix, message) {
+Codec.encode = function (mode, fingerprint, message) {
 	if (message === '') return '';
-	var key = Crypto.getKey(suffix);
+	var key = Crypto.getKey(fingerprint);
 	if (mode.queryOnly) {
 		return mode(message).join(' ');
 	} else {
-		var tags = mode(key, message).join(',');
-		var data = Crypto.encrypt(key, message, tags);
-		return '=?zerokit' + suffix + '?' + data + '?' + tags + '?=';
+		var tags = mode(key.secret, message).join(',');
+		var data = Crypto.encrypt(key.secret, message, tags);
+		return '=?zerokit-' + fingerprint + '?' + data + '?' + tags + '?=';
 	}
 };
 
-Codec.decode = function (suffix, data, tags) {
-	var key = Crypto.getKey(suffix);
-	return Crypto.decrypt(key, data, tags);
+Codec.decode = function (fingerprint, data, tags) {
+	var key = Crypto.getKey(fingerprint);
+	return Crypto.decrypt(key.secret, data, tags);
 };
 
 var Rewriter = {
-	FAST_FAIL_QUERY: '=?zerokit'
+	FAST_FAIL_QUERY: '=?zerokit-',
+	HIGHLIGHT_COLORS: [
+		'rgba(51,153,153,0.125)',
+		'rgba(51,102,153,0.125)',
+		'rgba(102,102,153,0.125)',
+		'rgba(173,73,119,0.125)',
+		'rgba(209,174,74,0.125)',
+		'rgba(153,102,51,0.125)',
+		'rgba(102,102,102,0.125)'
+	]
 };
 
 Rewriter.fastFail = function (text) {
@@ -450,7 +454,7 @@ Rewriter.findCodes = function (impl, node) {
 			var range = impl.createRange();
 			scanner.setStart(range, match.index);
 			if (Rewriter.checkBlacklist(range.startContainer)) continue;
-			var color = Crypto.getColor(match[1]);
+			var key = Crypto.getKey(match[1]);
 			var messageText = Codec.decode(match[1], match[2], match[3]);
 			var messageNode;
 			if (match[3]) {
@@ -462,7 +466,7 @@ Rewriter.findCodes = function (impl, node) {
 			scanner.setEnd(range, match.index + match[0].length);
 			scanner.sink(range, true);
 			if (!Rewriter.checkRangeEndpoints(range)) throw new Error('aborting suspicious range');
-			codes.push([range, color, messageNode]);
+			codes.push([range, key, messageNode]);
 		} catch (e) {
 			console.warn(e);
 		}
@@ -473,11 +477,8 @@ Rewriter.findCodes = function (impl, node) {
 Rewriter.repaceCodes = function (impl, codes) {
 	for (var i = 0; i < codes.length; i++) {
 		var range = codes[i][0];
-		var color = codes[i][1];
+		var key = codes[i][1];
 		var messageNode = codes[i][2];
-		var highlight = impl.createElement('span');
-		highlight.style.backgroundColor = 'rgba(192,0,64,0.125)'; // %%%
-		highlight.appendChild(messageNode);
 		// caveat: this doesn't work in <title>
 		var span = impl.createElement('span');
 		span.zerokitReplaced = true;
@@ -485,6 +486,9 @@ Rewriter.repaceCodes = function (impl, codes) {
 		var shadowRoot = Compat.createShadowRoot(span);
 		shadowRoot.applyAuthorStyles = true;
 		shadowRoot.resetStyleInheritance = false;
+		var highlight = impl.createElement('span');
+		highlight.style.backgroundColor = Rewriter.HIGHLIGHT_COLORS[key.color];
+		highlight.appendChild(messageNode);
 		shadowRoot.appendChild(highlight);
 		Compat.deleteShadowRootProp(span);
 		// we'll need to prevent olderShadowRoot when it gets implemented
@@ -496,9 +500,9 @@ Rewriter.rewriteMarkup = function (impl, node) {
 	if (codes) Rewriter.repaceCodes(impl, codes);
 };
 
-Rewriter.replacer = function (code, suffix, tags, data) {
+Rewriter.replacer = function (code, fingerprint, tags, data) {
 	try {
-		return Codec.decode(suffix, tags, data);
+		return Codec.decode(fingerprint, tags, data);
 	} catch (e) {
 		console.warn(e);
 		return code;
@@ -529,18 +533,18 @@ Widgets.Encrypted = function (e, o) {
 		}
 	}
 	if ('off' in o) {
-		this.suffix = null;
+		this.fingerprint = null;
 	}
 };
 Widgets.Encrypted.prototype = Object.create(Widgets.AbstractAdapter.prototype);
 Widgets.Encrypted.prototype.constructor = Widgets.Encrypted;
 
 Widgets.Encrypted.prototype.mode = Tags.modes.links;
-Widgets.Encrypted.prototype.suffix = null;
+Widgets.Encrypted.prototype.fingerprint = null;
 
 Widgets.Encrypted.prototype.encrypt = function (s) {
-	if (this.suffix === null) return s;
-	return Codec.encode(this.mode, this.suffix, s);
+	if (this.fingerprint === null) return s;
+	return Codec.encode(this.mode, this.fingerprint, s);
 };
 
 Widgets.Encrypted.prototype.decrypt = function (s) {
@@ -551,8 +555,8 @@ Widgets.Encrypted.prototype.refreshEncryption = function () {
 	// abstract
 };
 
-Widgets.Encrypted.prototype.setSuffix = function (suffix) {
-	this.suffix = suffix;
+Widgets.Encrypted.prototype.setFingerprint = function (fingerprint) {
+	this.fingerprint = fingerprint;
 	this.refreshEncryption();
 };
 
@@ -619,17 +623,18 @@ Widgets.KeyChanger = function (e, o) {
 	this.keyCount = 0;
 	this.keyElements = [];
 	this.keyNameElements = [];
-	for (var suffix in Crypto.keys) {
+	for (var fingerprint in Crypto.keys) {
+		var key = Crypto.keys[fingerprint];
 		var keyWrapper = Widgets.KeyChanger.appendDiv(impl, ring, 'key-wrapper unlocked');
-		var keyNameElement = Widgets.KeyChanger.appendDiv(impl, keyWrapper, 'key-name color-' + Crypto.keys[suffix].color);
-		keyNameElement.textContent = suffix;
+		var keyNameElement = Widgets.KeyChanger.appendDiv(impl, keyWrapper, 'key-name color-' + key.color);
+		keyNameElement.textContent = key.name;
 		this.keyNameElements.push(keyNameElement);
-		var keyElement = Widgets.KeyChanger.appendDiv(impl, keyWrapper, 'key color-' + Crypto.keys[suffix].color);
+		var keyElement = Widgets.KeyChanger.appendDiv(impl, keyWrapper, 'key color-' + key.color);
 		keyElement.style[Compat.transformProp] = 'rotate(150deg)';
 		this.keyElements.push(keyElement);
-		keyWrapper.addEventListener('mouseenter', this.enterKeyWrapper.bind(this, this.keyCount, suffix));
-		keyWrapper.addEventListener('mouseleave', this.leaveKeyWrapper.bind(this, this.keyCount, suffix));
-		keyWrapper.addEventListener('click', this.clickKeyWrapper.bind(this, this.keyCount, suffix));
+		keyWrapper.addEventListener('mouseenter', this.enterKeyWrapper.bind(this, this.keyCount, fingerprint));
+		keyWrapper.addEventListener('mouseleave', this.leaveKeyWrapper.bind(this, this.keyCount, fingerprint));
+		keyWrapper.addEventListener('click', this.clickKeyWrapper.bind(this, this.keyCount, fingerprint));
 		this.keyCount++;
 	}
 
@@ -662,7 +667,7 @@ Widgets.KeyChanger.appendDiv = function (impl, container, className) {
 
 Widgets.KeyChanger.init = function (impl) {
 	Widgets.KeyChanger.css =
-		'.delegate{display:block;position:relative;margin:0;border:medium none;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;outline:1px solid transparent;outline-offset:0;}\r\n' +
+		'.delegate{display:block;margin:0;border:medium none;padding:0;background:transparent;font:inherit;color:inherit;outline:1px solid transparent;outline-offset:0;}\r\n' +
 		'.delegate:focus{outline-width:2px;}\r\n' +
 		'.ui{position:absolute;bottom:0.625em;right:20px;}\r\n' +
 		'.key-ui.ui{z-index:1;}\r\n' +
@@ -670,8 +675,8 @@ Widgets.KeyChanger.init = function (impl) {
 		'.key-ui .ui-background{opacity:1;visibility:visible;}\r\n' +
 		'.ui-modal{position:fixed;top:0;left:0;bottom:0;right:0;background-color:white;transition:all ease-in-out 0.2s 0s;opacity:0;visibility:hidden;}\r\n' +
 		'.key-ui .ui-modal{opacity:0.5;visibility:visible;}\r\n' +
-		'.label-wrapper{position:absolute;top:12px;transition:all ease-in-out 0.2s 0.5s;opacity:0;visibility:hidden;}\r\n' +
-		'.ui:hover .label-wrapper{transition:all ease-in-out 0.2s 0s;opacity:1;visibility:visible;}\r\n' +
+		'.label-wrapper{position:absolute;top:12px;transition:all ease-in-out 0.2s 0s;opacity:0;visibility:hidden;}\r\n' +
+		'.ui:hover .label-wrapper{opacity:1;visibility:visible;}\r\n' +
 		'.ui.key-ui .label-wrapper{opacity:0;visibility:hidden;}\r\n' +
 		'.label{position:relative;left:-50%;border:1px solid #cccccc;padding:3px;background-color:white;font:10px sans-serif;white-space:nowrap;}\r\n' +
 		'.wrapper.unlocked .label{display:none;}\r\n' +
@@ -722,17 +727,18 @@ Widgets.KeyChanger.init = function (impl) {
 };
 
 Widgets.KeyChanger.prototype.refreshState = function () {
-	if (this.suffix === null) {
+	if (this.fingerprint === null) {
 		this.wrapper.className = 'wrapper unlocked';
 		this.label.textContent = '';
 	} else {
-		this.wrapper.className = 'wrapper locked-color-' + Crypto.getColor(this.suffix);
-		this.label.textContent = 'Encrypted with key ' + this.suffix;
+		var key = Crypto.keys[this.fingerprint];
+		this.wrapper.className = 'wrapper locked-color-' + key.color;
+		this.label.textContent = key.name + ': ' + key.passphrase;
 	}
 };
 
-Widgets.KeyChanger.prototype.setSuffix = function (suffix) {
-	Widgets.Encrypted.prototype.setSuffix.call(this, suffix);
+Widgets.KeyChanger.prototype.setFingerprint = function (fingerprint) {
+	Widgets.Encrypted.prototype.setFingerprint.call(this, fingerprint);
 	this.refreshState();
 };
 
@@ -787,23 +793,23 @@ Widgets.KeyChanger.prototype.clickLock = function (e) {
 	e.preventDefault();
 };
 
-Widgets.KeyChanger.prototype.enterKeyWrapper = function (i, suffix, e) {
+Widgets.KeyChanger.prototype.enterKeyWrapper = function (i, fingerprint, e) {
 	if (this.keySelectionVisible) this.rotateKeys(i);
 };
 
-Widgets.KeyChanger.prototype.leaveKeyWrapper = function (i, suffix, e) {
+Widgets.KeyChanger.prototype.leaveKeyWrapper = function (i, fingerprint, e) {
 	if (this.keySelectionVisible) this.rotateKeys('uniform');
 };
 
-Widgets.KeyChanger.prototype.clickKeyWrapper = function (i, suffix, e) {
-	this.setSuffix(suffix);
+Widgets.KeyChanger.prototype.clickKeyWrapper = function (i, fingerprint, e) {
+	this.setFingerprint(fingerprint);
 	this.hideKeySelection();
 	e.stopPropagation();
 	e.preventDefault();
 };
 
 Widgets.KeyChanger.prototype.clickUnlock = function (e) {
-	this.setSuffix(null);
+	this.setFingerprint(null);
 	this.hideKeySelection();
 	e.stopPropagation();
 	e.preventDefault();
@@ -813,6 +819,7 @@ Widgets.adapters.Form = function (e, o) {
 	Widgets.AbstractAdapter.call(this, e);
 	this.node.addEventListener('submit', this.onSubmit.bind(this));
 	Content.shimMethod(this.node, 'submit', this.submit.bind(this));
+	// TODO: also listen for 'reset'
 };
 Widgets.adapters.Form.prototype = Object.create(Widgets.AbstractAdapter.prototype);
 Widgets.adapters.Form.prototype.constructor = Widgets.adapters.Form;
@@ -848,6 +855,7 @@ Widgets.adapters.Input = function (e, o) {
 	this.setValue = Content.shimProp(this.node, 'value', this.node.value, this.onValueSet.bind(this));
 	this.node.zerokitInputEarly = this.onInputEarly.bind(this);
 
+	this.delegate.cssText = 'width:100%;height:100%;';
 	this.delegate.value = this.decrypt(this.node.value);
 	this.delegate.placeholder = this.decrypt(this.node.placeholder);
 	this.delegate.addEventListener('change', this.onChange.bind(this), true);
@@ -865,6 +873,7 @@ Widgets.adapters.Input.prototype.refreshEncryption = function () {
 	var cipher = this.encrypt(plain);
 	this.node.value = cipher;
 	this.setValue(cipher);
+	// TODO: this should probably dispatch an input event
 };
 
 Widgets.adapters.Input.prototype.onValueSet = function (v) {
@@ -892,10 +901,10 @@ Widgets.adapters.Input.prototype.onKeyDown = function (e) {
 			this.node.form.submit();
 		}
 	} else if (e.keyCode == 32 && e.ctrlKey) {
-		if (this.suffix === null) {
-			this.setSuffix(Widgets.Encrypted.prototype.suffix);
+		if (this.fingerprint === null) {
+			this.setFingerprint(Widgets.Encrypted.prototype.fingerprint);
 		} else {
-			this.setSuffix(null);
+			this.setFingerprint(null);
 		}
 		e.preventDefault();
 	}
@@ -908,6 +917,7 @@ Widgets.adapters.TextArea = function (e, o) {
 	this.node.value = this.decrypt(this.node.value);
 	this.node.zerokitDodge = this.dodge.bind(this);
 	this.node.zerokitInputEarly = this.onInputEarly.bind(this);
+	this.node.addEventListener('keydown', this.onKeyDown.bind(this), true);
 };
 Widgets.adapters.TextArea.prototype = Object.create(Widgets.Encrypted.prototype);
 Widgets.adapters.TextArea.prototype.constructor = Widgets.adapters.TextArea;
@@ -917,6 +927,7 @@ Widgets.adapters.TextArea.prototype.refreshEncryption = function () {
 	var cipher = this.encrypt(plain);
 	this.publicValue = cipher;
 	this.setValue(cipher);
+	// TODO: this should probably dispatch an input event
 };
 
 Widgets.adapters.TextArea.prototype.onValueSet = function (v) {
@@ -930,6 +941,17 @@ Widgets.adapters.TextArea.prototype.onInputEarly = function () {
 	this.refreshEncryption();
 };
 
+Widgets.adapters.TextArea.prototype.onKeyDown = function (e) {
+	if (e.keyCode == 32 && e.ctrlKey) {
+		if (this.fingerprint === null) {
+			this.setFingerprint(Widgets.Encrypted.prototype.fingerprint);
+		} else {
+			this.setFingerprint(null);
+		}
+		e.preventDefault();
+	}
+};
+
 Widgets.adapters.TextArea.prototype.dodge = function () {
 	var privateValue = this.node.value;
 	this.node.value = this.publicValue;
@@ -939,19 +961,19 @@ Widgets.adapters.TextArea.prototype.dodge = function () {
 };
 
 Widgets.adapters.ContentEditable = function (e, o) {
-	Widgets.Delegated.call(this, e, o);
+	Widgets.KeyChanger.call(this, e, o);
 	this.node.zerokitUpdateContent = this.updateContent.bind(this);
 
 	var impl = this.node.ownerDocument;
 	// caveat: height:100% only works when the parent has explicit height
-	this.delegate.style.cssText = 'display:block;margin:0;border:medium none;padding:0;width:100%;height:100%;background:transparent;font:inherit;color:inherit;outline:none;resize:none;';
+	this.delegate.style.cssText = 'position:absolute;top:0;left:0;bottom:0;right:0;width:auto;height:auto;';
 	this.delegate.value = this.decrypt(Compat.getInnerText(this.node));
 	this.delegate.addEventListener('input', this.onInput.bind(this), true);
 	this.delegate.addEventListener('keyup', Widgets.adapters.ContentEditable.stopEvent);
 	this.delegate.addEventListener('keydown', Widgets.adapters.ContentEditable.stopEvent);
 	this.delegate.addEventListener('keypress', Widgets.adapters.ContentEditable.stopEvent);
-	this.shadowContent.appendChild(this.delegate);
 
+	/*
 	// set explicit height, which caveat: might be undesirable
 	if (this.node === impl.body) {
 		// if this is the <body>, maximize height
@@ -971,11 +993,12 @@ Widgets.adapters.ContentEditable = function (e, o) {
 			this.node.style.height = offsetHeight + 'px';
 		}
 	}
+	*/
 
 	// note: this empties out innerText
 	this.activateDelegate();
 };
-Widgets.adapters.ContentEditable.prototype = Object.create(Widgets.Delegated.prototype);
+Widgets.adapters.ContentEditable.prototype = Object.create(Widgets.KeyChanger.prototype);
 Widgets.adapters.ContentEditable.prototype.constructor = Widgets.adapters.ContentEditable;
 
 Widgets.adapters.ContentEditable.stopEvent = function (e) {
@@ -988,6 +1011,7 @@ Widgets.adapters.ContentEditable.prototype.refreshEncryption = function () {
 	var plain = this.delegate.value;
 	var cipher = this.encrypt(plain);
 	this.node.textContent = cipher;
+	// TODO: this should probably dispatch an input event
 };
 
 Widgets.adapters.ContentEditable.prototype.onInput = function (e) {
@@ -1140,20 +1164,19 @@ Observer.init = function (doc) {
 };
 
 var Startup = {
-	key: null
+	name: null
 };
 
 Startup.init = function () {
-	Startup.key = 'origin-' + window.location.origin;
-	chrome.storage.sync.get(Startup.key, Startup.onGet);
+	Startup.name = 'origin-' + window.location.origin;
+	chrome.storage.sync.get(Startup.name, Startup.onGet);
 };
 
 Startup.onGet = function (items) {
-	if (!(Startup.key in items)) return;
-	var site = items[Startup.key];
+	if (!(Startup.name in items)) return;
+	var site = items[Startup.name];
 	Crypto.keys = site.keys;
-	Crypto.keys[''].color = 1; // %%%
-	Widgets.Encrypted.prototype.suffix = site.defaultSuffix;
+	Widgets.Encrypted.prototype.fingerprint = site.defaultFingerprint;
 	Widgets.rules = Startup.filterRules(site.rules);
 
 	Content.init();

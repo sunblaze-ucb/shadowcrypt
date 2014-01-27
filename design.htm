@@ -2,16 +2,16 @@
 <meta charset="utf-8">
 <body>
 <p>Hello world!</p>
-<p id="decoded1">basic text =?zerokit?uzizNx/D1eHTFLtNU2vh8fDv9iyA7G5ArKJkkOo=??= test</p>
+<p id="decoded1">basic text =?zerokit-t?uzizNx/D1eHTFLtNU2vh8fDv9iyA7G5ArKJkkOo=??= test</p>
 <form method="post" action="http://echo.opera.com/">
-<p id="contianer1"><input id="testinput" name="q" value="=?zerokit?IUVJDKZkFig5mzMIi716Xw8bB1plPPIRywljzKM=??="></p>
-<p id="contianer2"><textarea id="testtextarea" name="t" rows="4">=?zerokit?ti3UMLA+UCYkvG3aifPh8ekW2Z9NQeRY+MH/OXi5ciWghQ==??=</textarea></p>
+<p id="contianer1"><input id="testinput" name="q" value="=?zerokit-t?IUVJDKZkFig5mzMIi716Xw8bB1plPPIRywljzKM=??="></p>
+<p id="contianer2"><textarea id="testtextarea" name="t" rows="4">=?zerokit-t?ti3UMLA+UCYkvG3aifPh8ekW2Z9NQeRY+MH/OXi5ciWghQ==??=</textarea></p>
 <p>you said: <span id="display"></span></p>
 </form>
 <p><input type="button" value="remove input" onclick="removeInput()"><input type="button" value="append input" onclick="appendInput()"></p>
-<p><div id="test2" style="display:inline-block;padding:2px;width:132px;min-height:4em;background-color:#ffff80;" contenteditable>=?zerokit?y8XNHdvM5gWjSNpfK1BaSUqLN8xLjNg13zoDwXznoNxWij/3ndg=??=<br>...</div></p>
+<p><div id="test2" style="display:inline-block;padding:2px;width:132px;min-height:4em;background-color:#ffff80;" contenteditable>=?zerokit-t?y8XNHdvM5gWjSNpfK1BaSUqLN8xLjNg13zoDwXznoNxWij/3ndg=??=<br>...</div></p>
 <p>you said: <code id="disp2"></code></p>
-<p id="decoded2">and now the <em>html</em> test: &quot;=?zerokit?T/iCKKgqUs5VU+nnQ8Ffi4501joBKj3h75J3zfsiUtCM0SrKJcpUJ8VPulXf8OLC7X2ttA==?<a href="/hash/foo">#foo</a>,<a href="/user/bar">@bar</a>?=&quot; good luck</p>
+<p id="decoded2">and now the <em>html</em> test: &quot;=?zerokit-t?T/iCKKgqUs5VU+nnQ8Ffi4501joBKj3h75J3zfsiUtCM0SrKJcpUJ8VPulXf8OLC7X2ttA==?<a href="/hash/foo">#foo</a>,<a href="/user/bar">@bar</a>?=&quot; good luck</p>
 <script>
 var contianer1 = document.getElementById('contianer1');
 var testinput = document.getElementById('testinput');
@@ -21,9 +21,9 @@ testinput.addEventListener('change', function () {
 	console.log('onchange to ' + v);
 	display.textContent = v;
 });
-testtextarea.addEventListener('change', function () {
+testtextarea.addEventListener('input', function () {
 	var v = testtextarea.value;
-	console.log('onchange to ' + v);
+	console.log('onchange to ' + v + '(' + v.length + ')');
 	display.textContent = v;
 });
 function removeInput() {
