@@ -596,7 +596,7 @@ Widgets.Delegated = function (e, o) {
 Widgets.Delegated.prototype = Object.create(Widgets.Encrypted.prototype);
 Widgets.Delegated.prototype.constructor = Widgets.Delegated;
 
-Widgets.Delegated.prototype.useFlex = function () {
+Widgets.Delegated.prototype.applyHostStyles = function () {
 	var style = this.node.ownerDocument.defaultView.getComputedStyle(this.node);
 	switch (style.display) {
 	case 'inline':
@@ -611,10 +611,6 @@ Widgets.Delegated.prototype.useFlex = function () {
 		this.node.style.display = 'flex';
 		break;
 	}
-};
-
-Widgets.Delegated.prototype.usePosition = function () {
-	var style = this.node.ownerDocument.defaultView.getComputedStyle(this.node);
 	switch (style.position) {
 	case 'static':
 		this.node.style.position = 'relative';
@@ -639,8 +635,6 @@ Widgets.Delegated.prototype.onFocus = function (e) {
 Widgets.KeyChanger = function (e, o) {
 	Widgets.Delegated.call(this, e, o);
 	if (!Widgets.KeyChanger.initialized) Widgets.KeyChanger.init();
-	this.useFlex();
-	this.usePosition();
 
 	var impl = this.node.ownerDocument;
 	var style = impl.createElement('style');
@@ -898,6 +892,7 @@ Widgets.adapters.Input = function (e, o) {
 	this.delegate.value = this.decrypt(this.node.value);
 	this.delegate.addEventListener('change', this.onChange.bind(this), true);
 
+	this.applyHostStyles();
 	this.activateDelegate();
 };
 Widgets.adapters.Input.prototype = Object.create(Widgets.KeyChanger.prototype);
@@ -996,7 +991,7 @@ Widgets.adapters.ContentEditable = function (e, o) {
 	invisible.appendChild(innerTextReflector);
 	this.shadowContent.appendChild(invisible);
 
-	// note: this empties out innerText
+	this.applyHostStyles();
 	this.activateDelegate();
 };
 Widgets.adapters.ContentEditable.prototype = Object.create(Widgets.KeyChanger.prototype);
