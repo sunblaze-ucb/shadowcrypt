@@ -39,6 +39,10 @@ test2.addEventListener('input', function () {
 	console.log('contentEditable input to ' + v);
 	disp2.textContent = v;
 });
+
+window.addEventListener('keydown', function (e) {
+	console.log(e.keyCode);
+});
 </script>
 <p><input type="button" value="check tree 1" onclick="alert(document.getElementById('decoded1').innerHTML)"></p>
 <p><input type="button" value="check tree 2" onclick="alert(document.getElementById('decoded2').innerHTML)"></p>
