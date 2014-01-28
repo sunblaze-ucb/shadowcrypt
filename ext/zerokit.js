@@ -706,7 +706,7 @@ Widgets.KeyChanger.appendDiv = function (impl, container, className) {
 
 Widgets.KeyChanger.init = function (impl) {
 	Widgets.KeyChanger.css =
-		'.wrapper{display:flex;}\r\n' +
+		'.wrapper{display:flex;flex:auto;}\r\n' +
 		'.delegate{display:block;flex:auto;margin:0;border:medium none;padding:0;background:transparent;font:inherit;color:inherit;outline:1px solid transparent;outline-offset:0;resize:none;}\r\n' +
 		'.delegate:focus{outline-width:2px;}\r\n' +
 		'.ui{position:absolute;bottom:0.625em;right:20px;}\r\n' +
