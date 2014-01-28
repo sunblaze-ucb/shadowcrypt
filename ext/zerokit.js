@@ -76,6 +76,8 @@ Content.within = function () {
 		// caveat: you can't touch selection anymore
 		gateMethodProto(win.Selection.prototype, 'removeAllRanges', notInContentEditable.bind(null, win));
 		gateMethodProto(win.Selection.prototype, 'addRange', notInContentEditable.bind(null, win));
+		// caveat: breaks shadow dom for content
+		delete Element.webkitCreateShadowRoot;
 	}
 
 	setup(window);
