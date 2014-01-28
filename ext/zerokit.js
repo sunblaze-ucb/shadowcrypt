@@ -856,12 +856,12 @@ Widgets.adapters.Input = function (e, o) {
 	Widgets.KeyChanger.call(this, e, o);
 	this.setValue = Content.shimProp(this.node, 'value', this.node.value, this.onValueSet.bind(this));
 	this.node.zerokitInputEarly = this.onInputEarly.bind(this);
+	this.node.zerokitStopKeyEvents = true;
+	this.node.zerokitHandlePrivateEvent = this.handlePrivateEvent.bind(this);
 
 	this.delegate.cssText = 'width:100%;height:100%;';
 	this.delegate.value = this.decrypt(this.node.value);
-	this.delegate.placeholder = this.decrypt(this.node.placeholder);
 	this.delegate.addEventListener('change', this.onChange.bind(this), true);
-	this.delegate.addEventListener('keydown', this.onKeyDown.bind(this), true);
 
 	this.activateDelegate();
 };
@@ -894,21 +894,23 @@ Widgets.adapters.Input.prototype.onChange = function (e) {
 	this.node.dispatchEvent(event);
 };
 
-Widgets.adapters.Input.prototype.onKeyDown = function (e) {
-	if (e.keyCode === 13) {
-		if (!e.defaultPrevented && this.node.form) {
-			var event = new Event('submit');
-			this.node.form.dispatchEvent(event);
-			// caveat: doesn't take into account form* attributes
-			this.node.form.submit();
+Widgets.adapters.Input.prototype.handlePrivateEvent = function (e) {
+	if (e.type === 'keydown') {
+		if (e.keyCode === 13) {
+			if (!e.defaultPrevented && this.node.form) {
+				var event = new Event('submit');
+				this.node.form.dispatchEvent(event);
+				// caveat: doesn't take into account form* attributes
+				this.node.form.submit();
+			}
+		} else if (e.keyCode == 32 && e.ctrlKey) {
+			if (this.fingerprint === null) {
+				this.setFingerprint(Widgets.Encrypted.prototype.fingerprint);
+			} else {
+				this.setFingerprint(null);
+			}
+			e.preventDefault();
 		}
-	} else if (e.keyCode == 32 && e.ctrlKey) {
-		if (this.fingerprint === null) {
-			this.setFingerprint(Widgets.Encrypted.prototype.fingerprint);
-		} else {
-			this.setFingerprint(null);
-		}
-		e.preventDefault();
 	}
 };
 
@@ -1048,13 +1050,24 @@ Widgets.adapters.IFrame.prototype.onLoad = function () {
 };
 
 Widgets.init = function (win) {
-	// caveat: capture listeners registered before this will not see updated value
 	win.addEventListener('input', Widgets.onInputEarly, true);
+	win.addEventListener('keydown', Widgets.onInterceptKey, true);
+	win.addEventListener('keyup', Widgets.onInterceptKey, true);
+	win.addEventListener('keypress', Widgets.onInterceptKey, true);
 };
 
 Widgets.onInputEarly = function (e) {
 	if ('zerokitInputEarly' in e.target) {
 		e.target.zerokitInputEarly();
+	}
+};
+
+Widgets.onInterceptKey = function (e) {
+	if ('zerokitStopKeyEvents' in e.target) {
+		e.stopImmediatePropagation();
+		if ('zerokitHandlePrivateEvent' in e.target) {
+			e.target.zerokitHandlePrivateEvent(e);
+		}
 	}
 };
 
