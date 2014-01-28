@@ -989,6 +989,13 @@ Widgets.adapters.ContentEditable = function (e, o) {
 
 	this.delegate.value = this.decrypt(Compat.getInnerText(this.node));
 
+	var impl = this.node.ownerDocument;
+	var innerTextReflector = impl.createElement('content');
+	var invisible = impl.createElement('div');
+	invisible.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;';
+	invisible.appendChild(innerTextReflector);
+	this.shadowContent.appendChild(invisible);
+
 	// note: this empties out innerText
 	this.activateDelegate();
 };
