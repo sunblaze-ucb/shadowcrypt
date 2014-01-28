@@ -6,7 +6,7 @@ var MAX_ERROR = 1;
 
 var Model = {
 	SITE_KEY_PATTERN: /^origin-(.*)$/,
-	FINGERPRINT_PATTERN: /^[0-9a-f]{64}*$/,
+	FINGERPRINT_PATTERN: /^[0-9a-f]{64}$/,
 
 	STORAGE_ERROR: MAX_ERROR++,
 	ORIGIN_NORMALIZE_ERROR: MAX_ERROR++,
