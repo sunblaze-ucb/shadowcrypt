@@ -589,12 +589,18 @@ Widgets.Encrypted.prototype.handlePrivateEvent = function (e) {
 Widgets.Delegated = function (e, o) {
 	Widgets.Encrypted.call(this, e, o);
 	var impl = this.node.ownerDocument;
+	this.shadowHost = this.getShadowHost();
 	this.shadowContent = impl.createDocumentFragment();
 	this.delegate = impl.createElement(this.delegateTagName);
 	this.node.addEventListener('focus', this.onFocus.bind(this));
 };
 Widgets.Delegated.prototype = Object.create(Widgets.Encrypted.prototype);
 Widgets.Delegated.prototype.constructor = Widgets.Delegated;
+
+// a bug prevents <textarea> from being a shadow host, so allow something else to be
+Widgets.Delegated.prototype.getShadowHost = function () {
+	return this.node;
+};
 
 Widgets.Delegated.prototype.applyHostStyles = function () {
 	var style = this.node.ownerDocument.defaultView.getComputedStyle(this.node);
@@ -618,14 +624,15 @@ Widgets.Delegated.prototype.applyHostStyles = function () {
 	}
 };
 
-Widgets.Delegated.prototype.activateDelegate = function() {
-	var shadowRoot = Compat.createShadowRoot(this.node);
-	Compat.deleteShadowRootProp(this.node);
+Widgets.Delegated.prototype.activateDelegate = function () {
+	var hadFocus = this.node.ownerDocument.activeElement === this.node;
+	var shadowRoot = Compat.createShadowRoot(this.shadowHost);
+	Compat.deleteShadowRootProp(this.shadowHost);
 	shadowRoot.applyAuthorStyles = false;
 	shadowRoot.resetStyleInheritance = false;
 	shadowRoot.appendChild(this.shadowContent);
 	this.shadowContent = null;
-	if (this.node.ownerDocument.activeElement === this.node) this.delegate.focus();
+	if (hadFocus) this.delegate.focus();
 };
 
 Widgets.Delegated.prototype.onFocus = function (e) {
@@ -905,7 +912,6 @@ Widgets.adapters.Input.prototype.refreshEncryption = function () {
 	var cipher = this.encrypt(plain);
 	this.node.value = cipher;
 	this.setValue(cipher);
-	// TODO: this should probably dispatch an input event
 };
 
 Widgets.adapters.Input.prototype.onValueSet = function (v) {

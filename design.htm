@@ -23,7 +23,7 @@ testinput.addEventListener('change', function () {
 });
 testtextarea.addEventListener('input', function () {
 	var v = testtextarea.value;
-	console.log('onchange to ' + v + '(' + v.length + ')');
+	console.log('oninput to ' + v + '(' + v.length + ')');
 	display.textContent = v;
 });
 function removeInput() {
