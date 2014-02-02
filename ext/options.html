@@ -1,41 +1,125 @@
-<!doctype html>
-<title>Key management</title>
-<style>
-body{margin:3rem 2rem;background-color:#f8f8f8;font-family:Segoe UI,sans-serif;}
-input{margin:0;font-size:1rem;font-family:Segoe UI,sans-serif;}
-.textInput{box-sizing:border-box;box-shadow:0 1px 2px #f0f0f0 inset;border:1px solid #d0d0d0;border-radius:2px;padding:2px 4px;}
-h1{margin:1rem 0 0.5rem;border-bottom:1px solid #d0d0d0;font-weight:inherit;font-size:2rem;font-family:Segoe UI Light,Segoe UI,sans-serif;}
-#messageDisplay{position:fixed;top:0;left:0;float:left;margin:1rem 2rem;padding:2px 7px;z-index:1;}
-.error{background-color:#e0c000;}
-.delete{border:medium none;background:transparent;font-size:0.75rem;color:#d0d0d0;cursor:pointer;}
-.delete:hover{color:#0060c0;}
-.origin a{text-decoration:none;color:inherit;}
-.origin a:hover{color:#0060c0;}
-.origin a:hover:after{color:#d0d0d0;content:"/";}
-#importField{width:40rem;}
-#list{width:40rem;}
-.deleteSite{float:right;margin-top:23px;}
-.keys{margin:0;padding:0;list-style-type:none;}
-.key{margin:0.5rem 0;padding-left:27px;}
-.default{float:left;margin-left:-27px;}
-.default input{margin:0 7px;}
-.suffix:empty:after{content:"(empty name)";}
-.deleteKey{margin-left:1rem;}
-.share{margin:0.25rem 0 0;font-size:0.75rem;color:#999;}
-#generateForm{width:40rem;}
-#generateForm p{margin:0.5rem 0;width:25rem;text-align:right;}
-#generateForm .textInput{margin-left:0.5rem;width:20rem;}
-</style>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ShadowCrypt UI Test</title>
+
+    <script src="bower_components/jquery/jquery.js"></script>
+
+    <link rel="stylesheet" type="text/css" href="shadowcrypt-colors.css"/>
+    <link rel="stylesheet" type="text/css" href="style.css"/>
+    <script src="options.js"> </script>
+
+
+</head>
 <body>
-<div id="messageDisplay" class="error" style="visibility:hidden;"></div>
-<form id="importForm">
-<input id="importField" class="textInput" placeholder="Import key">
-</form>
-<div id="list"></div>
-<form id="generateForm">
-<h1>Generate new key</h1>
-<p><label>Website<input id="originField" class="textInput" placeholder="e.g. http://example.com"></label></p>
-<p><label>Key name<input id="suffixField" class="textInput" placeholder="(empty name)"></label></p>
-<p><input type="submit" value="Generate"></p>
-</form>
-<script src="options.js"></script>
+
+<div id="key-dialog-modal" class="modal">
+
+    <div class="modal-fade"></div>
+
+    <form id="key-dialog" class="dialog modal-element">
+        <h2 class="new-key dialog-area">Add new key</h2>
+        <h2 id="edit-key-title" class="edit-key dialog-area"><span class="shadowcrypt-key shadowcrypt-color-0"></span><span id="edit-key-domain"></span></h2>
+        <h2 class="import-key dialog-area">Import key</h2>
+
+        <div class="new-key dialog-area">
+            <p class="hint">ShadowCrypt will activate on this webpage.</p>
+            <label for="key-dialog-url">Domain URL</label>
+            <input id="key-dialog-url" type="text" name="key-url" value="" placeholder="http://" />
+        </div>
+
+        <div class="new-key edit-key dialog-area">
+            <p class="hint">The name needs to be unique for this url.</p>
+            <label for="key-dialog-name">Key Name</label>
+            <input id="key-dialog-name" type="text" name="key-name" value=""/>
+        </div>
+
+        <div class="new-key edit-key key-color-selection dialog-area">
+            <p class="label">Color</p>
+            <div class="input">
+                <input type="radio" name="key-color" id="key-dialog-color0"/><label for="key-dialog-color0"><span class="shadowcrypt-key shadowcrypt-color-0"></span></label>
+                <input type="radio" name="key-color" id="key-dialog-color1"/><label for="key-dialog-color1"><span class="shadowcrypt-key shadowcrypt-color-1"></span></label>
+                <input type="radio" name="key-color" id="key-dialog-color2"/><label for="key-dialog-color2"><span class="shadowcrypt-key shadowcrypt-color-2"></span></label>
+                <input type="radio" name="key-color" id="key-dialog-color3"/><label for="key-dialog-color3"><span class="shadowcrypt-key shadowcrypt-color-3"></span></label>
+                <input type="radio" name="key-color" id="key-dialog-color4"/><label for="key-dialog-color4"><span class="shadowcrypt-key shadowcrypt-color-4"></span></label>
+                <input type="radio" name="key-color" id="key-dialog-color5"/><label for="key-dialog-color5"><span class="shadowcrypt-key shadowcrypt-color-5"></span></label>
+                <input type="radio" name="key-color" id="key-dialog-color6"/><label for="key-dialog-color6"><span class="shadowcrypt-key shadowcrypt-color-6"></span></label>
+            </div>
+        </div>
+
+        <div class="new-key edit-key dialog-area">
+            <p class="hint">Use this as a reminder with whom you share this key.</p>
+            <label for="key-dialog-note">Note</label>
+            <textarea id="key-dialog-note" name="key-name"></textarea>
+        </div>
+
+        <div class="new-key edit-key dialog-area">
+            <p class="hint">This key will be activated first for this url.</p>
+            <label for="key-dialog-default">Default Key</label>
+            <input id="key-dialog-default" type="checkbox">
+        </div>
+
+        <div class="new-key edit-key dialog-area">
+            <p class="hint">Share this with your friend or group.</p>
+            <p class="label">Export String</p>
+            <div id="key-dialog-export" class="input export-string">&nbsp;</div>
+        </div>
+
+
+        <div class="import-key dialog-area">
+            <p class="hint">Paste in your friend's exported key string.</p>
+            <label for="key-dialog-import">Key String</label>
+            <input id="key-dialog-import" type="text" name="key-name" value="" placeholder="" />
+        </div>
+
+        <div class="dialog-buttons">
+            <span id="key-dialog-delete" class="delete-button dialog-area edit-key"></span>
+            <span id="key-dialog-cancel" class="button">Cancel</span>
+            <button id="key-dialog-ok" type="submit" class="button">OK</button>
+        </div>
+
+    </form>
+
+</div>
+
+
+<div id="dialog-box" class="modal">
+
+    <div class="modal-fade"></div>
+
+    <div id="ok-cancel-dialog" class="dialog modal-element">
+
+        <div class="dialog-content">
+
+        </div>
+
+        <div class="dialog-buttons">
+            <button id="dialog-cancel" class="button">Cancel</button>
+            <button id="dialog-ok" class="button">OK</button>
+        </div>
+    </div>
+
+    <div id="close-dialog" class="dialog modal-element">
+
+        <div class="dialog-content">
+
+        </div>
+
+        <div class="dialog-buttons">
+            <button id="dialog-close" class="button">Close</button>
+        </div>
+    </div>
+
+</div>
+
+
+<button id="new-key-button" class="button">New Key</button>
+<button id="import-key-button" class="button">Import</button>
+
+<div id="domain-list" class="keys-table-wrapper">
+    <table class="keys-table">
+    </table>
+</div>
+
+</body>
+</html>
