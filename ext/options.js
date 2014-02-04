@@ -442,9 +442,8 @@ shadowCrypt.KeyManagement = new function () {
             displayKeyDialog("import-key", function(){
                 var string = $("#key-dialog-import").val();
 
-                debugger;
                 var entry = importKeyFunction(string),
-                    fingerprint = sjcl.hash.sha256.hash(entry.key.secret);
+                    fingerprint = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(entry.key.secret));
 
                 addNewKeyUI(entry.url, entry.key, fingerprint, false)
             });
