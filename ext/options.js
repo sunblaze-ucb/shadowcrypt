@@ -255,7 +255,9 @@ shadowCrypt.KeyManagement = new function () {
         function addNewKeyUI(url, key, fingerprint, isDefault) {
             // Is this an existing domain?
             // Add the key to the database and create the UI.
-            url = 'origin-' + url;
+            if (url.slice(0, "origin-".length) != "origin-") {
+                url = 'origin-' + url;
+            }
             var domain = domains[url];
 
             if (domain) {
@@ -351,11 +353,18 @@ shadowCrypt.KeyManagement = new function () {
             var oldDefault = domain.defaultFingerprint;
 
             // Remove old default key.
-            domain.keysHolder.find(".key-holder.default-key").removeClass("default-key");
 
             // Add new one.
-            var index = 0;
+            var index = 0,
+                oldIndex = 0;
+
             for (var fingerprint in domain.keys) {
+                if (fingerprint == oldDefault) break;
+                oldIndex++;
+            }
+
+            //After loop, fingerprint is current key's fingerprint
+            for (fingerprint in domain.keys) {
                 if (domain.keys[fingerprint] == key) break;
                 index++;
             }
@@ -364,6 +373,7 @@ shadowCrypt.KeyManagement = new function () {
                 if (domains[url] == domain) break;
             }
 
+            domain.keysHolder.find(".key-holder").eq(oldIndex).removeClass("default-key");
             domain.defaultFingerprint = fingerprint;
             domain.keysHolder.find(".key-holder").eq(index).addClass("default-key");
 
@@ -432,9 +442,11 @@ shadowCrypt.KeyManagement = new function () {
             displayKeyDialog("import-key", function(){
                 var string = $("#key-dialog-import").val();
 
-                var entry = importKeyFunction(string);
+                debugger;
+                var entry = importKeyFunction(string),
+                    fingerprint = sjcl.hash.sha256.hash(entry.key.secret);
 
-                addNewKeyUI(entry.url, entry.key);
+                addNewKeyUI(entry.url, entry.key, fingerprint, false)
             });
         });
 
@@ -539,23 +551,22 @@ $(function () {
             , onNewKey
             , onEditKey
             , onDeletedKey
-            , function(domain, key){
+            , function(url, key){
                 // This is a function that transforms a key object into an export string.
                 //TODO
-                return domain + " [" + key.name + "] " + key.secret;
-
+                return url + " [" + key.name + "] " + sjcl.codec.hex.fromBits(key.secret);
             }, function(string){
                 // This is a function that transforms a key string into a key object.
                 var parts = string.split(" ");
-                var domain = parts[0];
+                var url = parts[0];
                 var name = parts[1].substr(1, parts[1].length-2);
-                var key = parts[2];
+                var secret = sjcl.codec.hex.toBits(parts[2]);
                 return {
-                    url: domain,
+                    url: url,
                     key: {
                         name: name,
                         color: Math.floor(Math.random() * 7),
-                        key: key
+                        secret: secret,
                     }
                 };
             }, onDefaultChange
