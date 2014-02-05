@@ -21,6 +21,11 @@ testinput.addEventListener('change', function () {
 	console.log('onchange to ' + v);
 	display.textContent = v;
 });
+testtextarea.addEventListener('change', function () {
+	var v = testtextarea.value;
+	console.log('onchange to ' + v + '(' + v.length + ')');
+	display.textContent = v;
+});
 testtextarea.addEventListener('input', function () {
 	var v = testtextarea.value;
 	console.log('oninput to ' + v + '(' + v.length + ')');
