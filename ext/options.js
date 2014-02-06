@@ -115,6 +115,8 @@ shadowCrypt.KeyManagement = new function () {
 
                 $("#key-dialog-name").val(key.name);
 
+                $("#key-dialog-passphrase").val(key.passphrase);
+
                 $("#key-dialog-note").val(key.note);
 
                 for (var keyFingerprint in domain.keys) {
@@ -126,6 +128,7 @@ shadowCrypt.KeyManagement = new function () {
                 $("#key-dialog-export").text(exportKeyFunction(url, key));
 
                 var keyCopy = jQuery.extend({}, key);
+
                 onKeyChangeCallback = function() {
                     keyCopy.name = $("#key-dialog-name").val();
                     keyCopy.color = activeEditKeyColor;
@@ -140,6 +143,7 @@ shadowCrypt.KeyManagement = new function () {
                     var newName = $("#key-dialog-name").val();
                     var newColor = activeEditKeyColor;
                     var newNote = $("#key-dialog-note").val();
+                    var newPassphrase = $("#key-dialog-passphrase").val();
                     var isDefault = $("#key-dialog-default").prop("checked");
 
                     // Verify new data.
@@ -160,6 +164,7 @@ shadowCrypt.KeyManagement = new function () {
                     key.name = newName;
                     key.color = newColor;
                     key.note = newNote;
+                    key.passphrase = newPassphrase
 
                     var updateStorage = {};
                     updateStorage[url] = domain;
@@ -302,7 +307,6 @@ shadowCrypt.KeyManagement = new function () {
                 if (domain.keys[keys[i]] == key) {
                     fingerprint = keys[i];
                     keyIndex = i;
-                    console.log(fingerprint);
                     break;
                 }
             }
@@ -396,7 +400,7 @@ shadowCrypt.KeyManagement = new function () {
                     name: "Default",
                     color: Math.floor(Math.random() * 7),
                     note: "",
-                    passphrase: "holder holder",
+                    passphrase: "",
                     secret: secret,
                 };
 
@@ -405,6 +409,8 @@ shadowCrypt.KeyManagement = new function () {
             $("#key-dialog-name").val(key.name);
 
             $("#key-dialog-note").val(key.note);
+
+            $("#key-dialog-passphrase").val(key.passphrase);
 
             $("#key-dialog-default").prop("checked", true);
 
@@ -430,22 +436,34 @@ shadowCrypt.KeyManagement = new function () {
                 }
 
                 // Return true if everything is OK and dialog should close.
+                setTimeout(function () {
+                    displayCloseDialog('<p> Key added for ' + url + '</p>');
+                }, 100);
+
                 return true;
             });
         });
 
         // Import key
-        // TODO
-        $("#import-key-button").click(function(){
+        $("#import-key-button").click(function () {
             $("#key-dialog-import").val("");
 
             displayKeyDialog("import-key", function(){
                 var string = $("#key-dialog-import").val();
 
-                var entry = importKeyFunction(string),
-                    fingerprint = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(entry.key.secret));
+                var entry = importKeyFunction(string);
 
-                addNewKeyUI(entry.url, entry.key, fingerprint, false)
+                if (! string) {
+                    displayCloseDialog('<p> Wrong key format. Try recopying the key </p>');
+                    return false;
+                }
+
+                var fingerprint = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(entry.key.secret));
+                var success = addNewKeyUI(entry.url, entry.key, fingerprint, false)
+                if (!success) return false;
+                
+                displayCloseDialog('<p> New key added for ' + entry.url + ' </p>');
+                return true;
             });
         });
 
@@ -552,22 +570,25 @@ $(function () {
             , onDeletedKey
             , function(url, key){
                 // This is a function that transforms a key object into an export string.
-                //TODO
                 return url + " [" + key.name + "] " + sjcl.codec.hex.fromBits(key.secret);
             }, function(string){
                 // This is a function that transforms a key string into a key object.
-                var parts = string.split(" ");
-                var url = parts[0];
-                var name = parts[1].substr(1, parts[1].length-2);
-                var secret = sjcl.codec.hex.toBits(parts[2]);
-                return {
-                    url: url,
-                    key: {
-                        name: name,
-                        color: Math.floor(Math.random() * 7),
-                        secret: secret,
-                    }
-                };
+                try { 
+                    var parts = string.split(" ");
+                    var url = parts[0];
+                    var name = parts[1].substr(1, parts[1].length-2);
+                    var secret = sjcl.codec.hex.toBits(parts[2]);
+                    return {
+                        url: url,
+                        key: {
+                            name: name,
+                            color: Math.floor(Math.random() * 7),
+                            secret: secret,
+                        }
+                    };
+                } catch (e) {
+                    return false;
+                }
             }, onDefaultChange
         );
     });
