@@ -516,7 +516,7 @@ Rewriter.processString = function (str) {
 };
 
 var Widgets = {
-	WIDGET_SELECTOR: 'form,input,textarea,[contenteditable],iframe',
+	WIDGET_SELECTOR: 'input,textarea,[contenteditable],iframe',
 	rules: null,
 	adapters: {}
 };
