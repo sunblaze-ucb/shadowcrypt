@@ -516,7 +516,7 @@ Rewriter.processString = function (str) {
 };
 
 var Widgets = {
-	WIDGET_SELECTOR: 'form,input,textarea,[contenteditable],iframe',
+	WIDGET_SELECTOR: 'input,textarea,[contenteditable],iframe',
 	rules: null,
 	adapters: {}
 };
@@ -537,9 +537,6 @@ Widgets.Encrypted = function (e, o) {
 	if ('off' in o) {
 		this.fingerprint = null;
 	}
-
-	this.node.zerokitStopKeyEvents = true;
-	this.node.zerokitHandlePrivateEvent = this.handlePrivateEvent.bind(this);
 };
 Widgets.Encrypted.prototype = Object.create(Widgets.AbstractAdapter.prototype);
 Widgets.Encrypted.prototype.constructor = Widgets.Encrypted;
@@ -570,22 +567,6 @@ Widgets.Encrypted.prototype.setMode = function (mode) {
 	this.refreshEncryption();
 };
 
-Widgets.Encrypted.prototype.handlePrivateEvent = function (e) {
-	if (e.type === 'keydown') {
-		if (e.keyCode == 32 && e.ctrlKey) {
-			if (this.fingerprint === null) {
-				this.setFingerprint(Widgets.Encrypted.prototype.fingerprint);
-			} else {
-				this.setFingerprint(null);
-			}
-			this.node.dispatchEvent(new Event('input'));
-			this.node.dispatchEvent(new Event('change'));
-			e.preventDefault();
-			return;
-		}
-	}
-};
-
 Widgets.Delegated = function (e, o) {
 	Widgets.Encrypted.call(this, e, o);
 	var impl = this.node.ownerDocument;
@@ -596,51 +577,100 @@ Widgets.Delegated = function (e, o) {
 Widgets.Delegated.prototype = Object.create(Widgets.Encrypted.prototype);
 Widgets.Delegated.prototype.constructor = Widgets.Delegated;
 
-Widgets.Delegated.prototype.useFlex = function () {
-	var style = this.node.ownerDocument.defaultView.getComputedStyle(this.node);
-	switch (style.display) {
+// a bug prevents <textarea> from being a shadow host, so allow something else to be
+Widgets.Delegated.prototype.getShadowHost = function () {
+	return this.node;
+};
+
+Widgets.Delegated.prototype.getCleartext = function () {
+	return this.delegate.value;
+};
+
+Widgets.Delegated.prototype.sideloadCleartext = function (v) {
+	this.delegate.value = v;
+	this.refreshEncryption();
+};
+
+Widgets.Delegated.prototype.synthesizeChange = function () {
+	this.node.dispatchEvent(new Event('input'));
+	this.node.dispatchEvent(new Event('change'));
+};
+
+Widgets.Delegated.prototype.applyHostStyles = function (dst, src) {
+	switch (src.display) {
 	case 'inline':
 	case 'inline-block':
 	case 'inline-table':
 	case 'inline-grid':
-		this.node.style.display = 'inline-flex';
+		dst.display = 'inline-flex';
 		break;
 	case 'block':
 	case 'table':
 	case 'grid':
-		this.node.style.display = 'flex';
+		dst.display = 'flex';
 		break;
 	}
-};
-
-Widgets.Delegated.prototype.usePosition = function () {
-	var style = this.node.ownerDocument.defaultView.getComputedStyle(this.node);
-	switch (style.position) {
+	switch (src.position) {
 	case 'static':
-		this.node.style.position = 'relative';
+		dst.position = 'relative';
 		break;
 	}
 };
 
-Widgets.Delegated.prototype.activateDelegate = function() {
-	var shadowRoot = Compat.createShadowRoot(this.node);
-	Compat.deleteShadowRootProp(this.node);
+Widgets.Delegated.prototype.activateDelegate = function () {
+	var impl = this.node.ownerDocument;
+	var hadFocus = impl.activeElement === this.node;
+	var style = impl.defaultView.getComputedStyle(this.node);
+	var shadowHost = this.getShadowHost();
+	shadowHost.zerokitInputEarly = this.onInputEarly.bind(this);
+	shadowHost.zerokitHandlePrivateEvent = this.handlePrivateEvent.bind(this);
+	this.applyHostStyles(shadowHost.style, style);
+	var shadowRoot = Compat.createShadowRoot(shadowHost);
+	Compat.deleteShadowRootProp(shadowHost);
 	shadowRoot.applyAuthorStyles = false;
 	shadowRoot.resetStyleInheritance = false;
 	shadowRoot.appendChild(this.shadowContent);
 	this.shadowContent = null;
-	if (this.node.ownerDocument.activeElement === this.node) this.delegate.focus();
+	if (hadFocus) this.delegate.focus();
 };
 
 Widgets.Delegated.prototype.onFocus = function (e) {
 	this.delegate.focus();
 };
 
+Widgets.Delegated.prototype.onInputEarly = function (e) {
+	this.refreshEncryption();
+};
+
+Widgets.Delegated.prototype.handlePrivateEvent = function (e) {
+	if (e.type === 'keydown') {
+		if (e.keyCode == 32 && e.ctrlKey) { // Ctrl+Space
+			if (this.fingerprint === null) {
+				this.setFingerprint(Widgets.Encrypted.prototype.fingerprint);
+			} else {
+				this.setFingerprint(null);
+			}
+			this.synthesizeChange();
+			e.preventDefault();
+			return;
+		} else if (e.keyCode == 192 && e.ctrlKey) { // Ctrl+Backtick
+			if (this.fingerprint !== null) {
+				var key = Crypto.keys[this.fingerprint];
+				var clear = window.prompt(key.passphrase, this.getCleartext());
+				if (clear !== null) {
+					this.sideloadCleartext(clear);
+					this.synthesizeChange();
+				}
+				e.preventDefault();
+			}
+			return;
+		}
+	}
+};
+
 Widgets.KeyChanger = function (e, o) {
 	Widgets.Delegated.call(this, e, o);
 	if (!Widgets.KeyChanger.initialized) Widgets.KeyChanger.init();
-	this.useFlex();
-	this.usePosition();
 
 	var impl = this.node.ownerDocument;
 	var style = impl.createElement('style');
@@ -855,45 +885,9 @@ Widgets.KeyChanger.prototype.clickUnlock = function (e) {
 	e.preventDefault();
 };
 
-Widgets.adapters.Form = function (e, o) {
-	Widgets.AbstractAdapter.call(this, e);
-	this.node.addEventListener('submit', this.onSubmit.bind(this));
-	Content.shimMethod(this.node, 'submit', this.submit.bind(this));
-	// TODO: also listen for 'reset'
-};
-Widgets.adapters.Form.prototype = Object.create(Widgets.AbstractAdapter.prototype);
-Widgets.adapters.Form.prototype.constructor = Widgets.adapters.Form;
-
-Widgets.adapters.Form.prototype.onSubmit = function (e) {
-	if (e.defaultPrevented) return;
-	var undodge = this.dodge();
-	if (undodge) Compat.afterSubmit(undodge);
-};
-
-Widgets.adapters.Form.prototype.submit = function () {
-	var undodge = this.dodge();
-	this.node.submit();
-	if (undodge) Compat.afterSubmit(undodge);
-};
-
-Widgets.adapters.Form.prototype.dodge = function () {
-	var undodges = [];
-	for (var i = 0; i < this.node.elements.length; i++) {
-		var elem = this.node.elements[i];
-		if ('zerokitDodge' in elem) undodges.push(elem.zerokitDodge());
-	}
-	if (!undodges.length) return null;
-	return function () {
-		for (var i = 0; i < undodges.length; i++) {
-			undodges[i]();
-		}
-	};
-};
-
 Widgets.adapters.Input = function (e, o) {
 	Widgets.KeyChanger.call(this, e, o);
 	this.setValue = Content.shimProp(this.node, 'value', this.node.value, this.onValueSet.bind(this));
-	this.node.zerokitInputEarly = this.onInputEarly.bind(this);
 
 	this.delegate.value = this.decrypt(this.node.value);
 	this.delegate.addEventListener('change', this.onChange.bind(this), true);
@@ -910,7 +904,6 @@ Widgets.adapters.Input.prototype.refreshEncryption = function () {
 	var cipher = this.encrypt(plain);
 	this.node.value = cipher;
 	this.setValue(cipher);
-	// TODO: this should probably dispatch an input event
 };
 
 Widgets.adapters.Input.prototype.onValueSet = function (v) {
@@ -918,10 +911,6 @@ Widgets.adapters.Input.prototype.onValueSet = function (v) {
 	var plain = this.decrypt(cipher);
 	this.node.value = cipher;
 	this.delegate.value = plain;
-};
-
-Widgets.adapters.Input.prototype.onInputEarly = function (e) {
-	this.refreshEncryption();
 };
 
 Widgets.adapters.Input.prototype.onChange = function (e) {
@@ -941,51 +930,89 @@ Widgets.adapters.Input.prototype.handlePrivateEvent = function (e) {
 			}
 		}
 	}
-	Widgets.Encrypted.prototype.handlePrivateEvent.call(this, e);
+	Widgets.Delegated.prototype.handlePrivateEvent.call(this, e);
 };
 
 Widgets.adapters.TextArea = function (e, o) {
-	Widgets.Encrypted.call(this, e, o);
-	this.publicValue = this.node.value;
+	Widgets.KeyChanger.call(this, e, o);
 	this.setValue = Content.shimProp(this.node, 'value', this.publicValue, this.onValueSet.bind(this));
-	this.node.value = this.decrypt(this.node.value);
-	this.node.zerokitDodge = this.dodge.bind(this);
-	this.node.zerokitInputEarly = this.onInputEarly.bind(this);
-	this.node.addEventListener('keydown', this.handlePrivateEvent.bind(this), true);
+
+	this.delegate.value = this.decrypt(this.node.value);
+	this.delegate.addEventListener('change', this.onChange.bind(this));
+
+	this.activateDelegate();
 };
-Widgets.adapters.TextArea.prototype = Object.create(Widgets.Encrypted.prototype);
+Widgets.adapters.TextArea.prototype = Object.create(Widgets.KeyChanger.prototype);
 Widgets.adapters.TextArea.prototype.constructor = Widgets.adapters.TextArea;
 
+Widgets.adapters.TextArea.simpleStyles = [
+	'visibility',
+	'top',
+	'left',
+	'bottom',
+	'right',
+	'float',
+	'clear',
+	'zIndex',
+	'boxSizing',
+	'margin',
+	'border',
+	'padding',
+	'boxShadow',
+	'width',
+	'height',
+	'background',
+	'font',
+	'color'
+];
+
+Widgets.adapters.TextArea.prototype.delegateTagName = 'textarea';
+
+Widgets.adapters.TextArea.prototype.getShadowHost = function () {
+	var impl = this.node.ownerDocument;
+	var parent = impl.createElement('div');
+	this.node.parentNode.replaceChild(parent, this.node);
+	parent.appendChild(this.node);
+	return parent;
+};
+
+Widgets.adapters.TextArea.prototype.applyHostStyles = function (dst, src) {
+	Widgets.Delegated.prototype.applyHostStyles.call(this, dst, src);
+	for (var i = 0; i < Widgets.adapters.TextArea.simpleStyles.length; i++) {
+		var name = Widgets.adapters.TextArea.simpleStyles[i];
+		dst[name] = src[name];
+	}
+};
+
 Widgets.adapters.TextArea.prototype.refreshEncryption = function () {
-	var plain = this.node.value;
+	var plain = this.delegate.value;
 	var cipher = this.encrypt(plain);
-	this.publicValue = cipher;
+	this.node.value = cipher;
 	this.setValue(cipher);
 };
 
 Widgets.adapters.TextArea.prototype.onValueSet = function (v) {
 	var cipher = v;
 	var plain = this.decrypt(cipher);
-	this.node.value = plain;
-	this.publicValue = cipher;
+	this.node.value = cipher;
+	this.delegate.value = plain;
 };
 
 Widgets.adapters.TextArea.prototype.onInputEarly = function (e) {
-	this.refreshEncryption();
+	Widgets.Delegated.prototype.onInputEarly.call(this, e);
+	e.stopPropagation();
+	var event = new Event('input');
+	this.node.dispatchEvent(event);
 };
 
-Widgets.adapters.TextArea.prototype.dodge = function () {
-	var privateValue = this.node.value;
-	this.node.value = this.publicValue;
-	return function () {
-		this.node.value = privateValue;
-	}.bind(this);
+Widgets.adapters.TextArea.prototype.onChange = function (e) {
+	var event = new Event('change');
+	this.node.dispatchEvent(event);
 };
 
 Widgets.adapters.ContentEditable = function (e, o) {
 	Widgets.KeyChanger.call(this, e, o);
 	this.node.zerokitUpdateContent = this.updateContent.bind(this);
-	this.node.zerokitInputEarly = this.onInputEarly.bind(this);
 
 	this.delegate.value = this.decrypt(Compat.getInnerText(this.node));
 
@@ -996,7 +1023,6 @@ Widgets.adapters.ContentEditable = function (e, o) {
 	invisible.appendChild(innerTextReflector);
 	this.shadowContent.appendChild(invisible);
 
-	// note: this empties out innerText
 	this.activateDelegate();
 };
 Widgets.adapters.ContentEditable.prototype = Object.create(Widgets.KeyChanger.prototype);
@@ -1015,10 +1041,6 @@ Widgets.adapters.ContentEditable.prototype.updateContent = function () {
 	var cipher = this.node.textContent;
 	var plain = this.decrypt(cipher);
 	this.delegate.value = plain;
-};
-
-Widgets.adapters.ContentEditable.prototype.onInputEarly = function (e) {
-	this.refreshEncryption();
 };
 
 Widgets.adapters.IFrame = function (e, o) {
@@ -1055,19 +1077,15 @@ Widgets.onInputEarly = function (e) {
 };
 
 Widgets.onInterceptKey = function (e) {
-	if ('zerokitStopKeyEvents' in e.target) {
+	if ('zerokitHandlePrivateEvent' in e.target) {
 		e.stopImmediatePropagation();
-		if ('zerokitHandlePrivateEvent' in e.target) {
-			e.target.zerokitHandlePrivateEvent(e);
-		}
+		e.target.zerokitHandlePrivateEvent(e);
 	}
 };
 
 Widgets.createAdapter = function (node, rule) {
 	var tag = node.tagName.toLowerCase();
-	if (tag === 'form') {
-		return new Widgets.adapters.Form(node, rule);
-	} else if (tag === 'input') {
+	if (tag === 'input') {
 		if (node.type === 'text') {
 			// TODO: more heuristics
 			return new Widgets.adapters.Input(node, rule);
