@@ -1236,6 +1236,7 @@ Startup.filterRules = function (rules) {
 	var url = window.location.href;
 	for (var i = 0; i < rules.length; i++) {
 		var rule = rules[i];
+		rule.urlPattern = new RegExp(rule.urlPattern);
 		if (rule.urlPattern.test(url)) applicable.push(rule);
 	}
 	return applicable;
