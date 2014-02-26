@@ -1130,11 +1130,17 @@ Widgets.findRule = function (node) {
 
 var Observer = {
 	OPTIONS: {
+		attributes: true,
 		childList: true,
 		characterData: true,
 		subtree: true
 	},
 	observer: null
+};
+
+Observer.onAttributes = function (target, attributeName) {
+	// console.log('attributes', target, attributeName); // %%%
+	if (attributeName === 'contenteditable' && target.contentEditable === 'true') Widgets.onAdd(target);
 };
 
 Observer.onCharacterData = function (target) {
@@ -1164,6 +1170,9 @@ Observer.callback = function (mutationRecords, observer) {
 		var target = mutationRecord.target;
 		var impl = target.ownerDocument;
 		switch (mutationRecord.type) {
+		case 'attributes':
+			Observer.onAttributes(mutationRecord.target, mutationRecord.attributeName);
+			break;
 		case 'characterData':
 			if (!target.ownerDocument.contains(target)) continue;
 			Observer.onCharacterData(target);
