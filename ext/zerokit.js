@@ -939,7 +939,7 @@ Widgets.adapters.Input.prototype.handlePrivateEvent = function (e) {
 
 Widgets.adapters.TextArea = function (e, o) {
 	Widgets.KeyChanger.call(this, e, o);
-	this.setValue = Content.shimProp(this.node, 'value', this.publicValue, this.onValueSet.bind(this));
+	this.setValue = Content.shimProp(this.node, 'value', this.node.value, this.onValueSet.bind(this));
 
 	this.delegate.value = this.decrypt(this.node.value);
 	this.delegate.addEventListener('change', this.onChange.bind(this));
@@ -1012,6 +1012,13 @@ Widgets.adapters.TextArea.prototype.onInputEarly = function (e) {
 Widgets.adapters.TextArea.prototype.onChange = function (e) {
 	var event = new Event('change');
 	this.node.dispatchEvent(event);
+};
+
+Widgets.adapters.TextArea.prototype.handlePrivateEvent = function (e) { // %%%%
+	var event = new KeyboardEvent(e.type, {});
+	this.node.dispatchEvent(event);
+	if (e.keyCode == 13) return false;
+	return Widgets.Delegated.prototype.handlePrivateEvent.call(this, e);
 };
 
 Widgets.adapters.ContentEditable = function (e, o) {
@@ -1120,8 +1127,10 @@ Widgets.updateContent = function (node) {
 Widgets.onAdd = function (node) {
 	if ('zerokitSeenWidget' in node) return;
 	var rule = Widgets.findRule(node);
-	if (!('noShim' in rule)) Widgets.createAdapter(node, rule);
-	node.zerokitSeenWidget = true;
+	if (!('noShim' in rule)) {
+		var adapter = Widgets.createAdapter(node, rule);
+		if (adapter !== null) node.zerokitSeenWidget = true;
+	}
 };
 
 Widgets.findRule = function (node) {
