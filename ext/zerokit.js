@@ -655,7 +655,7 @@ Widgets.Delegated.prototype.handlePrivateEvent = function (e) {
 			}
 			this.synthesizeChange();
 			e.preventDefault();
-			return;
+			return true;
 		} else if (e.keyCode == 192 && e.ctrlKey) { // Ctrl+Backtick
 			if (this.fingerprint !== null) {
 				var key = Crypto.keys[this.fingerprint];
@@ -666,9 +666,10 @@ Widgets.Delegated.prototype.handlePrivateEvent = function (e) {
 				}
 				e.preventDefault();
 			}
-			return;
+			return true;
 		}
 	}
+	return true;
 };
 
 Widgets.KeyChanger = function (e, o) {
@@ -922,18 +923,18 @@ Widgets.adapters.Input.prototype.onChange = function (e) {
 };
 
 Widgets.adapters.Input.prototype.handlePrivateEvent = function (e) {
-	if (e.type === 'keydown') {
-		if (e.keyCode === 13) {
-			if (!e.defaultPrevented && this.node.form) {
+	if (e.keyCode === 13) {
+		if (!e.defaultPrevented && this.node.form) {
+			if (e.type === 'keydown') {
 				var event = new Event('submit');
 				this.node.form.dispatchEvent(event);
 				// caveat: doesn't take into account form* attributes
 				this.node.form.submit();
-				return;
 			}
 		}
+		return false;
 	}
-	Widgets.Delegated.prototype.handlePrivateEvent.call(this, e);
+	return Widgets.Delegated.prototype.handlePrivateEvent.call(this, e);
 };
 
 Widgets.adapters.TextArea = function (e, o) {
@@ -1081,8 +1082,8 @@ Widgets.onInputEarly = function (e) {
 
 Widgets.onInterceptKey = function (e) {
 	if ('zerokitHandlePrivateEvent' in e.target) {
-		e.stopImmediatePropagation();
-		e.target.zerokitHandlePrivateEvent(e);
+		var shouldStop = e.target.zerokitHandlePrivateEvent(e);
+		if (shouldStop) e.stopImmediatePropagation();
 	}
 };
 
