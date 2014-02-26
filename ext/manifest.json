@@ -12,6 +12,10 @@
 		}
 	],
 
+	"background": {
+		"scripts": ["background.js"]
+	},
+
 	"options_page": "options.html",
 	"permissions": ["storage"],
 	"web_accessible_resources": [
