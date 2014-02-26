@@ -26,11 +26,11 @@ Content.within = function () {
 			},
 			set: function (v) {
 				value = v;
-				var event = new CustomEvent('zerokit-prop-set-' + name, {detail: value});
+				var event = new CustomEvent('shadowcrypt-prop-set-' + name, {detail: value});
 				node.dispatchEvent(event);
 			}
 		});
-		node.addEventListener('zerokit-set-prop-' + name, function (e) {
+		node.addEventListener('shadowcrypt-set-prop-' + name, function (e) {
 			value = e.detail;
 		});
 	}
@@ -40,7 +40,7 @@ Content.within = function () {
 		var node = e.target;
 		var name = e.detail.name;
 		node[name] = function () {
-			var event = new Event('zerokit-method-call-' + name);
+			var event = new Event('shadowcrypt-method-call-' + name);
 			node.dispatchEvent(event);
 		};
 	}
@@ -69,10 +69,10 @@ Content.within = function () {
 	}
 
 	function setup(win) {
-		win.addEventListener('zerokit-add-listeners', onSetup, true);
-		win.addEventListener('zerokit-shim-prop', onShimProp, true);
-		win.addEventListener('zerokit-shim-method', onShimMethod, true);
-		win.addEventListener('zerokit-delete-prop', onDeleteProp, true);
+		win.addEventListener('shadowcrypt-add-listeners', onSetup, true);
+		win.addEventListener('shadowcrypt-shim-prop', onShimProp, true);
+		win.addEventListener('shadowcrypt-shim-method', onShimMethod, true);
+		win.addEventListener('shadowcrypt-delete-prop', onDeleteProp, true);
 		// caveat: you can't touch selection anymore
 		gateMethodProto(win.Selection.prototype, 'removeAllRanges', notInContentEditable.bind(null, win));
 		gateMethodProto(win.Selection.prototype, 'addRange', notInContentEditable.bind(null, win));
@@ -90,32 +90,32 @@ Content.init = function () {
 };
 
 Content.propagate = function (iframe) {
-	var event = new Event('zerokit-add-listeners', false, false);
+	var event = new Event('shadowcrypt-add-listeners', false, false);
 	iframe.dispatchEvent(event);
 };
 
 Content.shimProp = function (node, name, value, handler) {
-	node.addEventListener('zerokit-prop-set-' + name, function (e) {
+	node.addEventListener('shadowcrypt-prop-set-' + name, function (e) {
 		handler(e.detail);
 	});
-	var event = new CustomEvent('zerokit-shim-prop', {detail: {name: name, value: value}});
+	var event = new CustomEvent('shadowcrypt-shim-prop', {detail: {name: name, value: value}});
 	node.dispatchEvent(event);
 	return function (v) {
-		var event = new CustomEvent('zerokit-set-prop-' + name, {detail: v});
+		var event = new CustomEvent('shadowcrypt-set-prop-' + name, {detail: v});
 		node.dispatchEvent(event);
 	};
 };
 
 Content.shimMethod = function (node, name, handler) {
-	node.addEventListener('zerokit-method-call-' + name, function (e) {
+	node.addEventListener('shadowcrypt-method-call-' + name, function (e) {
 		handler();
 	});
-	var event = new CustomEvent('zerokit-shim-method', {detail: {name: name}});
+	var event = new CustomEvent('shadowcrypt-shim-method', {detail: {name: name}});
 	node.dispatchEvent(event);
 };
 
 Content.deleteProp = function (node, name) {
-	var event = new CustomEvent('zerokit-delete-prop', {detail: {name: name}});
+	var event = new CustomEvent('shadowcrypt-delete-prop', {detail: {name: name}});
 	node.dispatchEvent(event);
 };
 
@@ -340,7 +340,7 @@ Tags.modes.bloom = function (secret, message) {
 };
 
 Tags.readLinks = function (impl, scanner, text, match) {
-	var start = match.index + 12 + match[1].length + match[2].length;
+	var start = match.index + 16 + match[1].length + match[2].length;
 	var end = start + match[3].length;
 	var tags = [];
 	while (start < end) {
@@ -385,7 +385,7 @@ Tags.insertLinks = function (impl, message, tags) {
 };
 
 var Codec = {
-	CODE_PATTERN: /=\?zerokit-(\w*)\?([A-Za-z0-9+\/=]*)\?([^?\s]*)\?=/g
+	CODE_PATTERN: /=\?shadowcrypt-(\w*)\?([A-Za-z0-9+\/=]*)\?([^?\s]*)\?=/g
 	// reflect changes in Tags.readLinks
 };
 
@@ -397,7 +397,7 @@ Codec.encode = function (mode, fingerprint, message) {
 	} else {
 		var tags = mode(key.secret, message).join(',');
 		var data = Crypto.encrypt(key.secret, message, tags);
-		return '=?zerokit-' + fingerprint + '?' + data + '?' + tags + '?=';
+		return '=?shadowcrypt-' + fingerprint + '?' + data + '?' + tags + '?=';
 	}
 };
 
@@ -407,7 +407,7 @@ Codec.decode = function (fingerprint, data, tags) {
 };
 
 var Rewriter = {
-	FAST_FAIL_QUERY: '=?zerokit-',
+	FAST_FAIL_QUERY: '=?shadowcrypt-',
 	HIGHLIGHT_COLORS: [
 		'rgba(51,153,153,0.125)',
 		'rgba(51,102,153,0.125)',
@@ -429,8 +429,8 @@ Rewriter.fastFail = function (text) {
 Rewriter.checkBlacklist = function (node) {
 	if (!node) return false;
 	if (node.nodeType === Document.ELEMENT_NODE) {
-		if ('zerokitReplaced' in node) return true;
-		if ('zerokitUpdateContent' in node) return true;
+		if ('shadowcryptReplaced' in node) return true;
+		if ('shadowcryptUpdateContent' in node) return true;
 		if (node.tagName.toLowerCase() === 'textarea') return true;
 	}
 	return Rewriter.checkBlacklist(node.parentNode);
@@ -483,7 +483,7 @@ Rewriter.repaceCodes = function (impl, codes) {
 		var messageNode = codes[i][2];
 		// caveat: this doesn't work in <title>
 		var span = impl.createElement('span');
-		span.zerokitReplaced = true;
+		span.shadowcryptReplaced = true;
 		range.surroundContents(span);
 		var shadowRoot = Compat.createShadowRoot(span);
 		shadowRoot.applyAuthorStyles = true;
@@ -625,8 +625,8 @@ Widgets.Delegated.prototype.activateDelegate = function () {
 	var hadFocus = impl.activeElement === this.node;
 	var style = impl.defaultView.getComputedStyle(this.node);
 	var shadowHost = this.getShadowHost();
-	shadowHost.zerokitInputEarly = this.onInputEarly.bind(this);
-	shadowHost.zerokitHandlePrivateEvent = this.handlePrivateEvent.bind(this);
+	shadowHost.shadowcryptInputEarly = this.onInputEarly.bind(this);
+	shadowHost.shadowcryptHandlePrivateEvent = this.handlePrivateEvent.bind(this);
 	this.applyHostStyles(shadowHost.style, style);
 	var shadowRoot = Compat.createShadowRoot(shadowHost);
 	Compat.deleteShadowRootProp(shadowHost);
@@ -1023,7 +1023,7 @@ Widgets.adapters.TextArea.prototype.handlePrivateEvent = function (e) { // %%%%
 
 Widgets.adapters.ContentEditable = function (e, o) {
 	Widgets.KeyChanger.call(this, e, o);
-	this.node.zerokitUpdateContent = this.updateContent.bind(this);
+	this.node.shadowcryptUpdateContent = this.updateContent.bind(this);
 
 	this.delegate.value = this.decrypt(Compat.getInnerText(this.node));
 
@@ -1082,14 +1082,14 @@ Widgets.init = function (win) {
 };
 
 Widgets.onInputEarly = function (e) {
-	if ('zerokitInputEarly' in e.target) {
-		e.target.zerokitInputEarly(e);
+	if ('shadowcryptInputEarly' in e.target) {
+		e.target.shadowcryptInputEarly(e);
 	}
 };
 
 Widgets.onInterceptKey = function (e) {
-	if ('zerokitHandlePrivateEvent' in e.target) {
-		var shouldStop = e.target.zerokitHandlePrivateEvent(e);
+	if ('shadowcryptHandlePrivateEvent' in e.target) {
+		var shouldStop = e.target.shadowcryptHandlePrivateEvent(e);
 		if (shouldStop) e.stopImmediatePropagation();
 	}
 };
@@ -1116,8 +1116,8 @@ Widgets.createAdapter = function (node, rule) {
 Widgets.updateContent = function (node) {
 	if (!node) return;
 	if (node.nodeType === Document.ELEMENT_NODE) {
-		if ('zerokitUpdateContent' in node) {
-			node.zerokitUpdateContent();
+		if ('shadowcryptUpdateContent' in node) {
+			node.shadowcryptUpdateContent();
 			return;
 		}
 	}
@@ -1125,11 +1125,11 @@ Widgets.updateContent = function (node) {
 };
 
 Widgets.onAdd = function (node) {
-	if ('zerokitSeenWidget' in node) return;
+	if ('shadowcryptSeenWidget' in node) return;
 	var rule = Widgets.findRule(node);
 	if (!('noShim' in rule)) {
 		var adapter = Widgets.createAdapter(node, rule);
-		if (adapter !== null) node.zerokitSeenWidget = true;
+		if (adapter !== null) node.shadowcryptSeenWidget = true;
 	}
 };
 
