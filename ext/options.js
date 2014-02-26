@@ -1,382 +1,595 @@
-// this is sjcl configured with:
-// --compress=yui --without-all --with-bitArray --with-codecString --with-codecHex --with-sha256
-var sjcl={cipher:{},hash:{},keyexchange:{},mode:{},misc:{},codec:{},exception:{corrupt:function(a){this.toString=function(){return"CORRUPT: "+this.message};this.message=a},invalid:function(a){this.toString=function(){return"INVALID: "+this.message};this.message=a},bug:function(a){this.toString=function(){return"BUG: "+this.message};this.message=a},notReady:function(a){this.toString=function(){return"NOT READY: "+this.message};this.message=a}}};sjcl.bitArray={bitSlice:function(b,c,d){b=sjcl.bitArray._shiftRight(b.slice(c/32),32-(c&31)).slice(1);return(d===undefined)?b:sjcl.bitArray.clamp(b,d-c)},extract:function(c,d,f){var b,e=Math.floor((-d-f)&31);if((d+f-1^d)&-32){b=(c[d/32|0]<<(32-e))^(c[d/32+1|0]>>>e)}else{b=c[d/32|0]>>>e}return b&((1<<f)-1)},concat:function(c,a){if(c.length===0||a.length===0){return c.concat(a)}var d,e,f=c[c.length-1],b=sjcl.bitArray.getPartial(f);if(b===32){return c.concat(a)}else{return sjcl.bitArray._shiftRight(a,b,f|0,c.slice(0,c.length-1))}},bitLength:function(d){var c=d.length,b;if(c===0){return 0}b=d[c-1];return(c-1)*32+sjcl.bitArray.getPartial(b)},clamp:function(d,b){if(d.length*32<b){return d}d=d.slice(0,Math.ceil(b/32));var c=d.length;b=b&31;if(c>0&&b){d[c-1]=sjcl.bitArray.partial(b,d[c-1]&2147483648>>(b-1),1)}return d},partial:function(b,a,c){if(b===32){return a}return(c?a|0:a<<(32-b))+b*0x10000000000},getPartial:function(a){return Math.round(a/0x10000000000)||32},equal:function(e,d){if(sjcl.bitArray.bitLength(e)!==sjcl.bitArray.bitLength(d)){return false}var c=0,f;for(f=0;f<e.length;f++){c|=e[f]^d[f]}return(c===0)},_shiftRight:function(d,c,h,f){var g,b=0,e;if(f===undefined){f=[]}for(;c>=32;c-=32){f.push(h);h=0}if(c===0){return f.concat(d)}for(g=0;g<d.length;g++){f.push(h|d[g]>>>c);h=d[g]<<(32-c)}b=d.length?d[d.length-1]:0;e=sjcl.bitArray.getPartial(b);f.push(sjcl.bitArray.partial(c+e&31,(c+e>32)?h:f.pop(),1));return f},_xor4:function(a,b){return[a[0]^b[0],a[1]^b[1],a[2]^b[2],a[3]^b[3]]}};sjcl.codec.utf8String={fromBits:function(a){var b="",e=sjcl.bitArray.bitLength(a),d,c;for(d=0;d<e/8;d++){if((d&3)===0){c=a[d/4]}b+=String.fromCharCode(c>>>24);c<<=8}return decodeURIComponent(escape(b))},toBits:function(d){d=unescape(encodeURIComponent(d));var a=[],c,b=0;for(c=0;c<d.length;c++){b=b<<8|d.charCodeAt(c);if((c&3)===3){a.push(b);b=0}}if(c&3){a.push(sjcl.bitArray.partial(8*(c&3),b))}return a}};sjcl.codec.hex={fromBits:function(b){var c="",d,a;for(d=0;d<b.length;d++){c+=((b[d]|0)+0xf00000000000).toString(16).substr(4)}return c.substr(0,sjcl.bitArray.bitLength(b)/4)},toBits:function(d){var c,b=[],a;d=d.replace(/\s|0x/g,"");a=d.length;d=d+"00000000";for(c=0;c<d.length;c+=8){b.push(parseInt(d.substr(c,8),16)^0)}return sjcl.bitArray.clamp(b,a*4)}};sjcl.hash.sha256=function(a){if(!this._key[0]){this._precompute()}if(a){this._h=a._h.slice(0);this._buffer=a._buffer.slice(0);this._length=a._length}else{this.reset()}};sjcl.hash.sha256.hash=function(a){return(new sjcl.hash.sha256()).update(a).finalize()};sjcl.hash.sha256.prototype={blockSize:512,reset:function(){this._h=this._init.slice(0);this._buffer=[];this._length=0;return this},update:function(f){if(typeof f==="string"){f=sjcl.codec.utf8String.toBits(f)}var e,a=this._buffer=sjcl.bitArray.concat(this._buffer,f),d=this._length,c=this._length=d+sjcl.bitArray.bitLength(f);for(e=512+d&-512;e<=c;e+=512){this._block(a.splice(0,16))}return this},finalize:function(){var c,a=this._buffer,d=this._h;a=sjcl.bitArray.concat(a,[sjcl.bitArray.partial(1,1)]);for(c=a.length+2;c&15;c++){a.push(0)}a.push(Math.floor(this._length/0x100000000));a.push(this._length|0);while(a.length){this._block(a.splice(0,16))}this.reset();return d},_init:[],_key:[],_precompute:function(){var d=0,c=2,b;function a(e){return(e-Math.floor(e))*0x100000000|0}outer:for(;d<64;c++){for(b=2;b*b<=c;b++){if(c%b===0){continue outer}}if(d<8){this._init[d]=a(Math.pow(c,1/2))}this._key[d]=a(Math.pow(c,1/3));d++}},_block:function(q){var e,f,t,s,u=q.slice(0),j=this._h,c=this._key,r=j[0],p=j[1],o=j[2],n=j[3],m=j[4],l=j[5],g=j[6],d=j[7];for(e=0;e<64;e++){if(e<16){f=u[e]}else{t=u[(e+1)&15];s=u[(e+14)&15];f=u[e&15]=((t>>>7^t>>>18^t>>>3^t<<25^t<<14)+(s>>>17^s>>>19^s>>>10^s<<15^s<<13)+u[e&15]+u[(e+9)&15])|0}f=(f+d+(m>>>6^m>>>11^m>>>25^m<<26^m<<21^m<<7)+(g^m&(l^g))+c[e]);d=g;g=l;l=m;m=n+f|0;n=o;o=p;p=r;r=(f+((p&o)^(n&(p^o)))+(p>>>2^p>>>13^p>>>22^p<<30^p<<19^p<<10))|0}j[0]=j[0]+r|0;j[1]=j[1]+p|0;j[2]=j[2]+o|0;j[3]=j[3]+n|0;j[4]=j[4]+m|0;j[5]=j[5]+l|0;j[6]=j[6]+g|0;j[7]=j[7]+d|0}};
+shadowCrypt = {};
+shadowCrypt.KeyManagement = new function () {
 
-var MAX_ERROR = 1;
+    // Modal UI helpers
+    var dialogCallback;
+    var keyDialogCallback;
+    var keyDialogDeleteCallback;
 
-var Model = {
-	SITE_KEY_PATTERN: /^origin-(.*)$/,
-	FINGERPRINT_PATTERN: /^[0-9a-f]{64}$/,
+    // Generic function to display a modal element
+    function displayModal(elementSelector, fadeOut) {
 
-	STORAGE_ERROR: MAX_ERROR++,
-	ORIGIN_NORMALIZE_ERROR: MAX_ERROR++,
-	FINGERPRINT_FORMAT_ERROR: MAX_ERROR++,
-	KEY_LENGTH_ERROR: MAX_ERROR++,
-	COLLISION_ERROR: MAX_ERROR++,
-	REMOVE_DEFAULT_ERROR: MAX_ERROR++,
-	KEY_REFERENCE_ERROR: MAX_ERROR++,
-	SITE_REFERENCE_ERROR: MAX_ERROR++,
+        var element = $(elementSelector);
+        var modal = element.parents(".modal");
 
-	db: {}
+        modal.add(element).addClass("displayed");
+
+        if (fadeOut === undefined) fadeOut = true;
+
+        if (fadeOut) {
+            modal.addClass("fade-out");
+        } else {
+            modal.removeClass("fade-out");
+        }
+    }
+
+    // Generic function to hide a modal element
+    function hideModal(modal) {
+        var displayedElements = modal.children(".displayed");
+        modal.add(displayedElements).removeClass("displayed");
+    }
+
+
+    // Displaying the normal dialogs
+    function displayOKCancelDialog(content, callback) {
+        dialogCallback = callback;
+
+        $("#ok-cancel-dialog").find(".dialog-content").html(content);
+
+        displayModal("#ok-cancel-dialog");
+    }
+
+    function displayCloseDialog(content) {
+
+        $("#close-dialog").find(".dialog-content").html(content);
+
+        displayModal("#close-dialog");
+    }
+
+    function hideDialog() {
+        hideModal($("#dialog-box"));
+    }
+
+    // Displaying the key dialog
+    var activeDialogClass = null;
+    function displayKeyDialog(dialogClass, callback, deleteCallback) {
+        keyDialogCallback = callback;
+        keyDialogDeleteCallback = deleteCallback;
+
+        var dialog = $("#key-dialog");
+
+        if (activeDialogClass) {
+            dialog.removeClass(activeDialogClass);
+        }
+
+        activeDialogClass = dialogClass;
+
+        dialog.addClass(activeDialogClass);
+
+        displayModal("#key-dialog");
+    }
+
+    function hideKeyDialog() {
+        hideModal($("#key-dialog-modal"));
+    }
+
+
+    // Key icon color.
+    var activeEditKeyColor = 0;
+
+    function changeEditKeyColor(newColor) {
+        var keyIcon = $("#edit-key-title").find(".shadowcrypt-key");
+        keyIcon.removeClass("shadowcrypt-color-" + activeEditKeyColor);
+        activeEditKeyColor = newColor;
+        keyIcon.addClass("shadowcrypt-color-" + activeEditKeyColor);
+    }
+
+    function resetEditKeyColor(newColor) {
+        changeEditKeyColor(newColor);
+        $("#key-dialog-color" + activeEditKeyColor).prop("checked", true);
+    }
+
+    // Callback for when something is changed in the edit key dialog.
+    var onKeyChangeCallback;
+
+
+    // Key Management Main Initialize
+
+    this.initialize = function (domains, newKeyCallback, editKeyCallback, deleteKeyCallback, exportKeyFunction, importKeyFunction, defaultChangedCallback) {
+
+        // Populate the table of keys.
+        var keysTable =  $("#domain-list").find(".keys-table");
+        var globalHoverCounter = 0;
+        var tooltipActive = false;
+
+        function createKeyUI(domain, key, defaultKey, url) {
+            var keyButton = $("<div class='key-holder" + (defaultKey ? " default-key" : "") +
+                "'><div class='shadowcrypt-key shadowcrypt-color-" + key.color +
+                "'></div><div class='key-name-wrapper'><div class='shadowcrypt-key-name shadowcrypt-color-" + key.color +
+            "'>" + key.name + "</div></div></div>");
+
+            // Edit key button.
+            keyButton.click(function () {
+                originLength = "origin-".length;
+                $("#edit-key-domain").text(url.slice(originLength));
+
+                $("#key-dialog-name").val(key.name);
+
+                $("#key-dialog-passphrase").val(key.passphrase);
+
+                $("#key-dialog-note").val(key.note);
+
+                for (var keyFingerprint in domain.keys) {
+                    if (domain.keys[keyFingerprint] == key) break;
+                }
+
+                $("#key-dialog-default").prop("checked", domain.defaultFingerprint == keyFingerprint);
+
+                $("#key-dialog-export").text(exportKeyFunction(url, key));
+
+                var keyCopy = jQuery.extend({}, key);
+
+                onKeyChangeCallback = function() {
+                    keyCopy.name = $("#key-dialog-name").val();
+                    keyCopy.color = activeEditKeyColor;
+                    $("#key-dialog-export").text(exportKeyFunction(url, keyCopy));
+                };
+
+                resetEditKeyColor(key.color);
+
+                displayKeyDialog("edit-key", function() {
+
+                    // OK action at the end of edit key.
+                    var newName = $("#key-dialog-name").val();
+                    var newColor = activeEditKeyColor;
+                    var newNote = $("#key-dialog-note").val();
+                    var newPassphrase = $("#key-dialog-passphrase").val();
+                    var isDefault = $("#key-dialog-default").prop("checked");
+
+                    // Verify new data.
+                    if (!verifyKeyName(newName, domain, key, url)) {
+                        return false;
+                    }
+
+                    // Update the UI.
+                    var label = keyButton.find(".shadowcrypt-key-name");
+                    keyButton.find(".shadowcrypt-key").add(label).removeClass("shadowcrypt-color-" + key.color).addClass("shadowcrypt-color-" + newColor);
+                    label.text(newName);
+
+                    if (isDefault) {
+                        changeDefaultKey(domain, key);
+                    }
+
+                    // Update the object.
+                    key.name = newName;
+                    key.color = newColor;
+                    key.note = newNote;
+                    key.passphrase = newPassphrase
+
+                    var updateStorage = {};
+                    updateStorage[url] = domain;
+
+
+                    // Report to callback.
+                    editKeyCallback(domain, key, url);
+
+                    // Return true if everything is OK and dialog should close.
+                    return true;
+                }, function(deletedCallback){
+                    // Delete key action.
+                    var name = $("#key-dialog-name").val();
+                    displayOKCancelDialog("<p>Delete key " + name + "?</p>", function(){
+                        deleteKey(domain, key, url);
+                        hideKeyDialog();
+                    });
+                });
+            });
+
+            var hover = false;
+
+            keyButton.hover(function(){
+                hover=true;
+                globalHoverCounter++;
+                setTimeout(function(){
+                    if (hover) {
+                        keysTable.addClass("tooltip-active");
+                    }
+                }, 1000);
+            }, function(){
+                hover=false;
+                globalHoverCounter--;
+                setTimeout(function(){
+                    if (globalHoverCounter == 0 ) {
+                        keysTable.removeClass("tooltip-active");
+                    }
+                }, 200);
+            });
+
+            domain.keysHolder.append(keyButton);
+        }
+
+        function createDomainUI(domain, url){
+            // Create domain editor row.
+            var protocolIndex = url.indexOf("://");
+
+            if (protocolIndex > -1) {
+                protocolIndex += 3;
+            } else {
+                protocolIndex = 0;
+            }
+
+            var displayName = url.substr(protocolIndex);
+            var row = $("<tr><td class='domain-name'>" + displayName + "</td></tr>");
+            domain.row = row;
+
+            // Create keys cell.
+            var keysCell = $("<td>");
+
+            // Delete button
+            var deleteButton = $("<div class='delete-button'>");
+            deleteButton.click(function() {
+                displayOKCancelDialog("<p>Delete all the keys for domain " + displayName + "?</p>", function(){
+                    var keys = $.extend({}, domain.keys);
+                    for (var key in keys) {
+                        deleteKey(domain, keys[key], url);
+                    }
+                });
+            });
+            keysCell.append(deleteButton);
+
+            // Create keys holder.
+            var keysHolder = $("<div>");
+            keysCell.append(keysHolder);
+            row.append(keysCell);
+            domain.keysHolder = keysHolder;
+
+            for (var fingerprint in domain.keys) {
+                var key = domain.keys[fingerprint];
+                createKeyUI(domain, key, domain.defaultFingerprint == fingerprint, url);
+            }
+
+            // Insert row.
+            keysTable.append(row);
+        }
+
+        for (var origin in domains) {
+            createDomainUI(domains[origin], origin);
+        };
+
+        // Helper for updating the UI with a new key
+        function addNewKeyUI(url, key, fingerprint, isDefault) {
+            // Is this an existing domain?
+            // Add the key to the database and create the UI.
+            if (url.slice(0, "origin-".length) != "origin-") {
+                url = 'origin-' + url;
+            }
+            var domain = domains[url];
+
+            if (domain) {
+                // Verify data.
+                if (!verifyKeyName(key.name, domain, null, url)) {
+                    return false;
+                }
+                domain.keys[fingerprint] = key;
+                createKeyUI(domain, key, isDefault, url);
+            } else {
+                domain = {
+                    keys: {},
+                    "defaultFingerprint": fingerprint,
+                    rules: []
+                };
+                domain.keys[fingerprint] = key;
+                domains[url] = domain;
+                createDomainUI(domain, url);
+            }
+
+            var newDomain = {};
+            newDomain[url] = domain;
+
+            newKeyCallback(domain, key, url);
+
+            if (isDefault) {
+                changeDefaultKey(domain, url);
+            }
+
+            // Return true if key was added OK.
+            return true;
+        }
+
+        // Helper for deleting a key from the UI
+        function deleteKey(domain, key, url) {
+            var keys = Object.keys(domain.keys),
+                eyIndex,
+                isEmpty,
+                fingerprint;
+
+            for (var i = 0; i < keys.length; i++) {
+                if (domain.keys[keys[i]] == key) {
+                    fingerprint = keys[i];
+                    keyIndex = i;
+                    break;
+                }
+            }
+
+            delete domain.keys[fingerprint];
+
+            domain.keysHolder.find(".key-holder")[keyIndex].remove();
+            // If the domain is empty, remove it.
+            if ($.isEmptyObject(domain.keys)) {
+                domain.row.remove();
+                for (var site in domains) {
+                    if ($.isEmptyObject(domains[site].keys)) {
+                        delete domains[site];
+                        isEmpty = true;
+                    }
+                }
+            } else {
+                // Make sure to reassign the default if needed.
+                if (domain.defaultFingerprint == fingerprint) {
+                    // Default was deleted, reassign to the end.
+                    var keys = Object.keys(domain.keys),
+                        newDefault = keys[keys.length - 1];
+                    changeDefaultKey(domain, domain.keys[newDefault]);
+                }
+            }
+
+            // Report to callback.
+            deleteKeyCallback(domain, key, url, isEmpty);
+        }
+
+        // Helper for making sure the key name is unique
+        function verifyKeyName(name, domain, existing, url) {
+            var nameOK = true;
+
+            for (fingerprint in domain.keys) {
+                var key = domain.keys[fingerprint];
+                if (key.name == name && key != existing) {
+                    displayCloseDialog("<p>The name " + name + " is already in use for " + url +". Please choose another key name.</p>");
+                    nameOK = false;
+                }
+            }
+
+            return nameOK;
+        }
+
+        // Helper for changing the default key of the domain
+        function changeDefaultKey(domain, key) {
+            var oldDefault = domain.defaultFingerprint;
+
+            // Remove old default key.
+
+            // Add new one.
+            var index = 0,
+                oldIndex = 0;
+
+            for (var fingerprint in domain.keys) {
+                if (fingerprint == oldDefault) break;
+                oldIndex++;
+            }
+
+            //After loop, fingerprint is current key's fingerprint
+            for (fingerprint in domain.keys) {
+                if (domain.keys[fingerprint] == key) break;
+                index++;
+            }
+
+            for (var url in domains) {
+                if (domains[url] == domain) break;
+            }
+
+            domain.keysHolder.find(".key-holder").eq(oldIndex).removeClass("default-key");
+            domain.defaultFingerprint = fingerprint;
+            domain.keysHolder.find(".key-holder").eq(index).addClass("default-key");
+
+            // Report to callack if default has changed.
+            if (domain.defaultFingerprint != oldDefault) {
+                defaultChangedCallback(domain, key, url);
+            }
+        }
+
+
+        // Hook up the main toolbar buttons.
+
+        // New key
+        $("#new-key-button").click(function(){
+
+            var url = "",
+                secret = Array.prototype.slice.call(window.crypto.getRandomValues(new Uint32Array(4))),
+                fingerprint = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(secret)),
+                key = {
+                    name: "Default",
+                    color: Math.floor(Math.random() * 7),
+                    note: "",
+                    passphrase: "",
+                    secret: secret,
+                };
+
+            $("#key-dialog-url").val(url);
+
+            $("#key-dialog-name").val(key.name);
+
+            $("#key-dialog-note").val(key.note);
+
+            $("#key-dialog-passphrase").val(key.passphrase);
+
+            $("#key-dialog-default").prop("checked", true);
+
+            $("#key-dialog-export").text(exportKeyFunction(url, key));
+
+            onKeyChangeCallback = function() {
+                key.name = $("#key-dialog-name").val();
+                key.color = activeEditKeyColor;
+                url = $("#key-dialog-url").val();
+                $("#key-dialog-export").text(exportKeyFunction(url, key));
+            };
+
+            resetEditKeyColor(key.color);
+
+            displayKeyDialog("new-key", function(){
+                // OK action at the end of add new key.
+                onKeyChangeCallback();
+                // Update the UI.
+                var changeDefault = $("#key-dialog-default").prop("checked");
+                var success = addNewKeyUI(url, key, fingerprint, changeDefault);
+                if (!success) {
+                    return false;
+                }
+
+                // Return true if everything is OK and dialog should close.
+                setTimeout(function () {
+                    displayCloseDialog('<p> Key added for ' + url + '</p>');
+                }, 100);
+
+                return true;
+            });
+        });
+
+        // Import key
+        $("#import-key-button").click(function () {
+            $("#key-dialog-import").val("");
+
+            displayKeyDialog("import-key", function(){
+                var string = $("#key-dialog-import").val();
+
+                var entry = importKeyFunction(string);
+
+                if (! string) {
+                    displayCloseDialog('<p> Wrong key format. Try recopying the key </p>');
+                    return false;
+                }
+
+                var fingerprint = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(entry.key.secret));
+                var success = addNewKeyUI(entry.url, entry.key, fingerprint, false)
+                if (!success) return false;
+                
+                displayCloseDialog('<p> New key added for ' + entry.url + ' </p>');
+                return true;
+            });
+        });
+
+        // Hook up dialog buttons.
+        $("#key-dialog-delete").click(function(){
+            var deleted = false;
+            if (keyDialogDeleteCallback) {
+                keyDialogDeleteCallback();
+            }
+
+            return false;
+        });
+
+        $("#key-dialog-cancel").click(function(){
+            hideKeyDialog();
+
+            return false;
+        });
+
+        function keyDialogConfirmed(){
+            var success = true;
+            if (keyDialogCallback) {
+                success = keyDialogCallback();
+            }
+
+            if (success) hideKeyDialog();
+
+            return false;
+        }
+
+        $("#key-dialog-ok").click(keyDialogConfirmed);
+        $("#key-dialog").submit(keyDialogConfirmed);
+
+        $("#dialog-cancel").add("#dialog-close").click(hideDialog);
+        $("#dialog-ok").click(function(){
+            if (dialogCallback) {
+                dialogCallback();
+                dialogCallback = null;
+            }
+
+            hideDialog();
+        });
+
+
+        // Hook up color selection buttons.
+        for (var i=0;i<7;i++) {
+            (function(i){
+                $("#key-dialog-color" + i).click(function(){
+                    changeEditKeyColor(i);
+                    onKeyChangeCallback();
+                });})(i);
+        }
+
+        // Hook up input box changes.
+        $("#key-dialog-name").add("#key-dialog-url").change(function(){
+            onKeyChangeCallback();
+        });
+
+        $("#key-dialog-name").add("#key-dialog-url").keyup(function(){
+            onKeyChangeCallback();
+        });
+    };
+
 };
 
-Model.checkStorageError = function (onError) {
-	if (chrome.runtime.lastError) {
-		onError(Model.STORAGE_ERROR);
-		return true;
-	}
-	return false;
+function prepareSyncData(domain, url) {
+    var newDoamin = {};
+    newDoamin[url] = domain;
+    return newDoamin;
+}
+
+function onNewKey(domain, key, url) {
+    chrome.storage.sync.set(prepareSyncData(domain, url));
+    console.log("Key " + key.name + " created for URL " + url);
+    return key;
+}
+
+function onEditKey(domain, key, url) {
+    chrome.storage.sync.set(prepareSyncData(domain, url));
+    console.log("Key " + key.name + " at URL " + url + " was edited.");
+}
+
+function onDeletedKey(domain, key, url, isEmpty) {
+    if (isEmpty) {
+        chrome.storage.sync.remove(url);
+    } else {
+        chrome.storage.sync.set(prepareSyncData(domain, url));
+    }
+    console.log("Key " + key.name + " deleted for URL " + url);
 };
 
-Model.init = function (onAddSite, onAddKey, onError) {
-	chrome.storage.sync.get(function (items) {
-		if (Model.checkStorageError(onError)) return;
-		for (var key in items) {
-			var m = Model.SITE_KEY_PATTERN.exec(key);
-			if (!m) continue;
-			var origin = m[1];
-			var site = items[key];
-			Model.db[origin] = site;
-			onAddSite(origin, site);
-			for (var fingerprint in site.keys) {
-				onAddKey(origin, fingerprint, fingerprint === site.defaultFingerprint, site.keys[fingerprint]);
-			}
-		}
-	});
-};
+function onDefaultChange(domain, key, url) {
+    chrome.storage.sync.set(prepareSyncData(domain, url));
+    console.log("Key " + key.name + " is now the default for URL " + url + ".");
+}
 
-Model.computeFingerprint = function (secret) {
-	return sjcl.codec.hex.fromBits(sjcl.hash.sha256(secret));
-};
-
-Model.validateOrigin = function (origin, onError) {
-	// URL constructor doesn't work before Chrome 32
-	var a = document.createElement('a');
-	a.href = origin + '/';
-	if (a.origin !== origin) {
-		onError(Model.ORIGIN_NORMALIZE_ERROR);
-		return true;
-	}
-	return false;
-};
-
-Model.validateSecret = function (secret, onError) {
-	switch (sjcl.bitArray.bitLength(secret)) {
-	case 128:
-	case 192:
-	case 256:
-		return false;
-	default:
-		onError(Model.KEY_LENGTH_ERROR);
-		return true;
-	}
-};
-
-Model.add = function (origin, fingerprint, name, secret, color, passphrase, onAddSite, onAddKey, onSuccess, onError) {
-	if (Model.validateOrigin(origin, onError)) return;
-	if (Model.validateFingerprint(fingerprint, onError)) return;
-	if (Model.validateSecret(secret, onError)) return;
-	if (origin in Model.db) {
-		var site = Model.db[origin];
-		if (fingerprint in site.keys) {
-			onError(Model.COLLISION_ERROR);
-		} else {
-			var key = {
-				name: name,
-				secret: secret,
-				color: color,
-				passphrase: passphrase
-			};
-			site.keys[fingerprint] = key;
-			var items = {};
-			items['origin-' + origin] = site;
-			chrome.storage.sync.set(items, function () {
-				if (Model.checkStorageError(onError)) {
-					delete site.keys[fingerprint];
-				} else {
-					onAddKey(origin, fingerprint, false, key);
-					onSuccess();
-				}
-			});
-		}
-	} else {
-		var site = {keys: {}, defaultSuffix: null};
-		var key = {
-			name: name,
-			secret: secret,
-			color: color,
-			passphrase: passphrase
-		};
-		site.keys[fingerprint] = key;
-		site.defaultSuffix = fingerprint;
-		site.rules = [];
-		Model.db[origin] = site;
-		var items = {};
-		items['origin-' + origin] = site;
-		chrome.storage.sync.set(items, function () {
-			if (Model.checkStorageError(onError)) {
-				delete Model.db[origin];
-			} else {
-				onAddSite(origin, site);
-				onAddKey(origin, fingerprint, true, key);
-				onSuccess();
-			}
-		});
-	}
-};
-
-Model.removeSite = function (origin, onRemoveSite, onSuccess, onError) {
-	if (origin in Model.db) {
-		var site = Model.db[origin];
-		delete Model.db[origin];
-		chrome.storage.sync.remove(['origin-' + origin], function () {
-			if (Model.checkStorageError(onError)) {
-				Model.db[origin] = site;
-			} else {
-				onRemoveSite(origin);
-				onSuccess();
-			}
-		});
-	} else {
-		onError(Model.SITE_REFERENCE_ERROR);
-	}
-};
-
-Model.removeKey = function (origin, fingerprint, onRemoveKey, onSuccess, onError) {
-	if (origin in Model.db) {
-		var site = Model.db[origin];
-		if (fingerprint === site.defaultSuffix) {
-			onError(Model.REMOVE_DEFAULT_ERROR);
-		} else if (fingerprint in site.keys) {
-			var key = site.keys[fingerprint];
-			delete site.keys[fingerprint];
-			var items = {};
-			items['origin-' + origin] = site;
-			chrome.storage.sync.set(items, function () {
-				if (Model.checkStorageError(onError)) {
-					site.keys[fingerprint] = key;
-				} else {
-					onRemoveKey(origin, fingerprint);
-					onSuccess();
-				}
-			});
-		} else {
-			onError(Model.KEY_REFERENCE_ERROR);
-		}
-	} else {
-		onError(Model.KEY_REFERENCE_ERROR);
-	}
-};
-
-Model.setDefault = function (origin, fingerprint, onSetDefault, onSuccess, onError) {
-	if (origin in Model.db) {
-		var site = Model.db[origin];
-		if (fingerprint in site.keys) {
-			var oldSuffix = site.defaultSuffix;
-			site.defaultSuffix = fingerprint;
-			var items = {};
-			items['origin-' + origin] = site;
-			chrome.storage.sync.set(items, function () {
-				if (Model.checkStorageError(onError)) {
-					site.defaultSuffix = oldSuffix;
-				} else {
-					onSetDefault(origin, fingerprint);
-					onSuccess();
-				}
-			});
-		} else {
-			onError(Model.KEY_REFERENCE_ERROR);
-		}
-	} else {
-		onError(Model.KEY_REFERENCE_ERROR);
-	}
-};
-
-var View = {
-	errorMessages: {},
-	messageDisplay: null,
-	importForm: null,
-	importField: null,
-	generateForm: null,
-	originField: null,
-	nameField: null,
-	colorField: null,
-	passphraseField: null,
-	list: null
-};
-
-View.init = function () {
-	// in init() because not all error codes are declared until the bottom
-	View.errorMessages[Model.STORAGE_ERROR] = 'Error saving change';
-	View.errorMessages[Model.ORIGIN_NORMALIZE_ERROR] = 'Website must be specified as an origin';
-	// View.errorMessages[Model.FINGERPRINT_FORMAT_ERROR] is not a user-facing error
-	View.errorMessages[Model.KEY_LENGTH_ERROR] = 'Key must be 128, 192, or 256 bits';
-	View.errorMessages[Model.COLLISION_ERROR] = 'You already have that key on that site';
-	View.errorMessages[Model.REMOVE_DEFAULT_ERROR] = 'Cannot delete a site\'s default key';
-	View.errorMessages[Model.KEY_REFERENCE_ERROR] = 'The specified key does not exist';
-	View.errorMessages[Model.SITE_REFERENCE_ERROR] = 'The specified site does not exist';
-	View.errorMessages[Controller.IMPORT_FORMAT_ERROR] = 'Malformed key specification';
-
-	View.messageDisplay = document.getElementById('messageDisplay');
-	View.importForm = document.getElementById('importForm');
-	View.importField = document.getElementById('importField');
-	View.generateForm = document.getElementById('generateForm');
-	View.originField = document.getElementById('originField');
-	View.nameField = document.getElementById('nameField');
-	View.colorField = document.getElementById('colorField');
-	View.passphraseField = document.getElementById('passphraseField');
-	View.list = document.getElementById('list');
-
-	View.importForm.addEventListener('submit', function (e) {
-		e.preventDefault();
-		Controller.importKey(importField.value);
-	});
-
-	View.generateForm.addEventListener('submit', function (e) {
-		e.preventDefault();
-		Controller.generateKey(originField.value, nameField.value);
-	});
-};
-
-View.showMessage = function (className, message) {
-	View.messageDisplay.className = className;
-	View.messageDisplay.textContent = message;
-	View.messageDisplay.style.visibility = '';
-};
-
-View.hideMessage = function () {
-	View.messageDisplay.style.visibility = 'hidden';
-};
-
-View.onSuccess = function () {
-	View.hideMessage();
-};
-
-View.onError = function (error) {
-	var message = View.errorMessages[error] || '' + error;
-	View.showMessage('error', message);
-};
-
-View.onAddSite = function (origin, site) {
-	var div = document.createElement('div');
-	div.id = 'site-' + origin;
-	div.className = 'site';
-	var h1 = document.createElement('h1');
-	h1.className = 'origin';
-	var a = document.createElement('a');
-	a.href = origin + '/';
-	a.target = '_blank';
-	a.textContent = origin;
-	h1.appendChild(a);
-	var button = document.createElement('input');
-	button.type = 'button';
-	button.className = 'delete deleteSite';
-	button.value = 'Delete';
-	button.addEventListener('click', function (e) {
-		Controller.removeSite(origin);
-	});
-	h1.appendChild(button);
-	div.appendChild(h1);
-	var ul = document.createElement('ul');
-	ul.className = 'keys';
-	div.appendChild(ul);
-	View.list.appendChild(div);
-};
-
-View.onRemoveSite = function (origin) {
-	var div = document.getElementById('site-' + origin);
-	div.parentNode.removeChild(div);
-};
-
-View.onAddKey = function (origin, suffix, isDefault, key, color) {
-	var div = document.getElementById('site-' + origin);
-	var ul = div.querySelector('.keys');
-	var li = document.createElement('li');
-	li.id = 'key-' + origin + '/' + suffix;
-	li.className = 'key';
-	var label = document.createElement('label');
-	label.className = 'default';
-	var radio = document.createElement('input');
-	radio.type = 'radio';
-	radio.name = origin;
-	radio.value = suffix;
-	radio.checked = isDefault;
-	radio.addEventListener('click', function (e) {
-		e.preventDefault();
-		Controller.setDefault(origin, suffix);
-	});
-	label.appendChild(radio);
-	var span = document.createElement('span');
-	span.className = 'suffix';
-	span.style.color = color;
-	span.textContent = suffix;
-	label.appendChild(span);
-	li.appendChild(label);
-	var button = document.createElement('input');
-	button.type = 'button';
-	button.className = 'delete deleteKey';
-	button.value = 'Delete';
-	button.addEventListener('click', function (e) {
-		Controller.removeKey(origin, suffix);
-	});
-	li.appendChild(button);
-	var p = document.createElement('p');
-	p.className = 'share';
-	p.textContent = origin + ' [' + suffix + '] ' + sjcl.codec.hex.fromBits(key);
-	li.appendChild(p);
-	ul.appendChild(li);
-};
-
-View.onRemoveKey = function (origin, suffix) {
-	var li = document.getElementById('key-' + origin + '/' + suffix);
-	li.parentNode.removeChild(li);
-};
-
-View.onSetDefault = function (origin, suffix) {
-	var li = document.getElementById('key-' + origin + '/' + suffix);
-	var radio = li.querySelector('.default input');
-	radio.checked = true;
-};
-
-var Controller = {
-	IMPORT_PATTERN: /^(\S*) \[(\w*)\] ([0-9A-Fa-f]+)$/,
-	KEY_LENGTH: 4,
-
-	IMPORT_FORMAT_ERROR: MAX_ERROR++
-};
-
-Controller.importKey = function (spec) {
-	var m = Controller.IMPORT_PATTERN.exec(spec);
-	if (m) {
-		var origin = m[1];
-		var suffix = m[2];
-		var key = sjcl.codec.hex.toBits(m[3]);
-		Model.add(origin, suffix, key, View.onAddSite, View.onAddKey, View.onSuccess, View.onError);
-	} else {
-		View.onError(Controller.IMPORT_FORMAT_ERROR);
-	}
-};
-
-Controller.generateKey = function (origin, suffix) {
-	var key = Array.prototype.slice.call(window.crypto.getRandomValues(new Uint32Array(Controller.KEY_LENGTH)));
-	Model.add(origin, suffix, key, View.onAddSite, View.onAddKey, View.onSuccess, View.onError);
-};
-
-Controller.removeSite = function (origin) {
-	Model.removeSite(origin, View.onRemoveSite, View.onSuccess, View.onError);
-};
-
-Controller.removeKey = function (origin, suffix) {
-	Model.removeKey(origin, suffix, View.onRemoveKey, View.onSuccess, View.onError);
-};
-
-Controller.setDefault = function (origin, suffix) {
-	Model.setDefault(origin, suffix, View.onSetDefault, View.onSuccess, View.onError);
-};
-
-Controller.init = function () {
-	View.init();
-	Model.init(View.onAddSite, View.onAddKey, View.onError);
-};
-
-Controller.init();
+// On load initialize the UI
+$(function () {
+    chrome.storage.sync.get(function (domains) {
+        shadowCrypt.KeyManagement.initialize( 
+            domains
+            , onNewKey
+            , onEditKey
+            , onDeletedKey
+            , function(url, key){
+                // This is a function that transforms a key object into an export string.
+                return url + " [" + key.name + "] " + sjcl.codec.hex.fromBits(key.secret);
+            }, function(string){
+                // This is a function that transforms a key string into a key object.
+                try { 
+                    var parts = string.split(" ");
+                    var url = parts[0];
+                    var name = parts[1].substr(1, parts[1].length-2);
+                    var secret = sjcl.codec.hex.toBits(parts[2]);
+                    return {
+                        url: url,
+                        key: {
+                            name: name,
+                            color: Math.floor(Math.random() * 7),
+                            secret: secret,
+                        }
+                    };
+                } catch (e) {
+                    return false;
+                }
+            }, onDefaultChange
+        );
+    });
+});
