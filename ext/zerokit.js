@@ -609,6 +609,9 @@ Widgets.Delegated.prototype.applyHostStyles = function (dst, src) {
 	case 'grid':
 		dst.display = 'flex';
 		break;
+	case 'none':
+		dst.display = 'none';
+		break;
 	}
 	switch (src.position) {
 	case 'static':
