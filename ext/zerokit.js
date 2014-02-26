@@ -620,10 +620,10 @@ Widgets.Delegated.prototype.applyHostStyles = function (dst, src) {
 Widgets.Delegated.prototype.activateDelegate = function () {
 	var impl = this.node.ownerDocument;
 	var hadFocus = impl.activeElement === this.node;
+	var style = impl.defaultView.getComputedStyle(this.node);
 	var shadowHost = this.getShadowHost();
 	shadowHost.zerokitInputEarly = this.onInputEarly.bind(this);
 	shadowHost.zerokitHandlePrivateEvent = this.handlePrivateEvent.bind(this);
-	var style = impl.defaultView.getComputedStyle(this.node);
 	this.applyHostStyles(shadowHost.style, style);
 	var shadowRoot = Compat.createShadowRoot(shadowHost);
 	Compat.deleteShadowRootProp(shadowHost);
@@ -945,6 +945,27 @@ Widgets.adapters.TextArea = function (e, o) {
 Widgets.adapters.TextArea.prototype = Object.create(Widgets.KeyChanger.prototype);
 Widgets.adapters.TextArea.prototype.constructor = Widgets.adapters.TextArea;
 
+Widgets.adapters.TextArea.simpleStyles = [
+	'visibility',
+	'top',
+	'left',
+	'bottom',
+	'right',
+	'float',
+	'clear',
+	'zIndex',
+	'boxSizing',
+	'margin',
+	'border',
+	'padding',
+	'boxShadow',
+	'width',
+	'height',
+	'background',
+	'font',
+	'color'
+];
+
 Widgets.adapters.TextArea.prototype.delegateTagName = 'textarea';
 
 Widgets.adapters.TextArea.prototype.getShadowHost = function () {
@@ -956,8 +977,11 @@ Widgets.adapters.TextArea.prototype.getShadowHost = function () {
 };
 
 Widgets.adapters.TextArea.prototype.applyHostStyles = function (dst, src) {
-	dst.cssText = src.cssText;
 	Widgets.Delegated.prototype.applyHostStyles.call(this, dst, src);
+	for (var i = 0; i < Widgets.adapters.TextArea.simpleStyles.length; i++) {
+		var name = Widgets.adapters.TextArea.simpleStyles[i];
+		dst[name] = src[name];
+	}
 };
 
 Widgets.adapters.TextArea.prototype.refreshEncryption = function () {
