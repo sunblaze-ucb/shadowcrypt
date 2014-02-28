@@ -1014,7 +1014,7 @@ Widgets.adapters.TextArea.prototype.onChange = function (e) {
 	this.node.dispatchEvent(event);
 };
 
-Widgets.adapters.TextArea.prototype.handlePrivateEvent = function (e) { // %%%%
+Widgets.adapters.TextArea.prototype.handlePrivateEvent = function (e) {
 	var event = new KeyboardEvent(e.type, {});
 	this.node.dispatchEvent(event);
 	if (e.keyCode == 13) return false;
