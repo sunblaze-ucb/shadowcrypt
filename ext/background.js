@@ -55,22 +55,24 @@ chrome.storage.sync.get(function (o) {
     },
     "rules": [
         {
-            urlPattern: '\?lg',
+            urlPattern: '[^&?]lg*',
             selector: "#email_input",
-            noShim: true
+            noShim: true, 
         },
 
         {
-            urlPattern: '\?lg',
+            urlPattern: '[^&?]lg*',
             selector: "#password_input",
-            noShim: true
+            noShim: true,
         },
 
         {
-            urlPattern: '',
+            urlPattern: '$',
             selector: "#nav_search_input",
+            noShim: false,
+            off: false,
             mode: "wordsQuery"
-        }
+        },
     ]
   },
   "origin-https://mail.google.com": {
@@ -128,29 +130,36 @@ chrome.storage.sync.get(function (o) {
     },
     "rules": [
         {
-            urlPattern: '',
+            urlPattern: '$',
             selector: ".email-input",
-            noShim: true
+            noShim: true, 
+            off: true,
+            mode: "none"
         },
 
         {
-            urlPattern: '',
+            urlPattern: 'login',
             selector: ".js-password-field",
-            noShim: true
+            noShim: true,
+            off: true,
+            mode: "none"
         },
 
         {
-            urlPattern: '',
+            urlPattern: '$',
             selector: ".search-input",
+            noShim: false,
             off: true,
             mode: "wordsQuery"
         },
 
         {
-            urlPattern: '',
+            urlPattern: '$',
             selector: ".dm-to-input",
-            noShim: true
-        }
+            noShim: true,
+            off: true,
+            mode: "none"
+        },
     ]
   },
   "origin-https://www.facebook.com": {
@@ -171,36 +180,75 @@ chrome.storage.sync.get(function (o) {
     },
     "rules": [
         {
-            urlPattern: '/',
+            urlPattern: '$',
             selector: "#email",
-            noShim: true
+            noShim: true, 
+            off: true,
+            mode: "none"
         },
 
         {
-            urlPattern: '/',
+            urlPattern: '$',
             selector: "#pass",
-            noShim: true
+            noShim: true,
         },
 
         {
-            urlPattern: '/',
-            selector: ".inputtext.586f.DOMControl_placeholder.hidden_elem",
+            urlPattern: '$',
+            selector: ".inputtext.DOMControl_placeholder.hidden_elem",
+            noShim: false,
             off: true,
             mode: "wordsQuery"
         },
 
         {
-            urlPattern: '/',
+            urlPattern: '$',
+            selector: ".inputtext.DOMControl_placeholder",
+            noShim: true,
+        },
+
+        {
+            urlPattern: '$',
             selector: ".inputtext.inputsearch.textInput",
             off: true,
             mode: "wordsQuery"
         },
 
         {
-            urlPattern: '/',
+            urlPattern: '$',
             selector: ".inputtext.inputsearch",
             off: true,
             mode: "wordsQuery"
+        },
+
+        {
+            urlPattern: '$',
+            selector: "#u_0_1",
+            noShim: true
+        },
+
+        {
+            urlPattern: '$',
+            selector: "#u_0_a",
+            noShim: true
+        },
+
+        {
+            urlPattern: '$',
+            selector: "#u_0_3",
+            noShim: true
+        },
+
+        {
+            urlPattern: '$',
+            selector: "#u_0_5",
+            noShim: true
+        },
+
+        {
+            urlPattern: '$',
+            selector: "#u_0_8",
+            noShim: true
         },
     ]
   }
