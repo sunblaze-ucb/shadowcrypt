@@ -87,7 +87,7 @@ body {
     background: -40px 0 url("../Spritesheet-01.png");
     width: 40px;
     height: 40px;
-    -webkit-transition: -webkit-transform ease-in-out 0.2s 0s;
+    transition: transform ease-in-out 0.2s 0s;
 }
 
 .keys-table tr:hover .delete-button {
@@ -95,24 +95,24 @@ body {
 }
 
 .keys-table .delete-button:hover {
-    -webkit-transform: scale(1.2);
+    transform: scale(1.2);
 }
 
 .keys-table .shadowcrypt-key {
     position: relative;
     display: inline-block;
-    -webkit-transition: -webkit-transform ease-in-out 0.2s,  opacity ease-in-out 0.2s;
-    -webkit-transform: scale(0.9) rotate(-20deg);
+    transition: transform ease-in-out 0.2s,  opacity ease-in-out 0.2s;
+    transform: scale(0.9) rotate(-20deg);
     opacity: 0.5;
 }
 
 .keys-table .key-holder.default-key .shadowcrypt-key {
-    -webkit-transform: rotate(-20deg) scale(1);
+    transform: rotate(-20deg) scale(1);
     opacity: 1;
 }
 
 .keys-table .key-holder:hover .shadowcrypt-key {
-    -webkit-transform: translate(0, -2px) rotate(-25deg) scale(1.2);
+    transform: translate(0, -2px) rotate(-25deg) scale(1.2);
     opacity: 1;
 
 }
@@ -123,17 +123,17 @@ body {
     z-index: 1;
     visibility: hidden;
     opacity: 0;
-    -webkit-transition: all ease-in-out 0.2s 0s;
+    transition: all ease-in-out 0.2s 0s;
 }
 
 .keys-table .key-holder:hover .key-name-wrapper {
     visibility: visible;
     opacity: 1;
-    -webkit-transition: all ease-in-out 0.2s 1s;
+    transition: all ease-in-out 0.2s 1s;
 }
 
 .keys-table.tooltip-active .key-holder:hover .key-name-wrapper {
-    -webkit-transition: all ease-in-out 0.2s 0;
+    transition: all ease-in-out 0.2s 0;
 }
 
 .keys-table .key-holder.default-key .shadowcrypt-key-name:after  {
@@ -171,7 +171,7 @@ body {
 
 .modal {
     z-index: 1000;
-    -webkit-transition: visibility 0s linear 0.3s, opacity 0.3s;
+    transition: visibility 0s linear 0.3s, opacity 0.3s;
     visibility: hidden;
     opacity: 0;
     overflow: hidden;
@@ -180,17 +180,17 @@ body {
 .modal.displayed {
     opacity: 1;
     visibility: visible;
-    -webkit-transition-delay:0s;
+    transition-delay:0s;
 }
 
 .modal .modal-element {
     visibility: hidden;
-    -webkit-transition: visibility 0s linear 0.3s;
+    transition: visibility 0s linear 0.3s;
 }
 
 .modal.displayed .displayed.modal-element {
     visibility: visible;
-    -webkit-transition-delay:0s;
+    transition-delay:0s;
 }
 
 .modal-fade {
@@ -235,7 +235,7 @@ body {
 
 .dialog h2#edit-key-title .shadowcrypt-key {
     display: inline-block;
-    -webkit-transform: translate(0,4px) rotate(-20deg) ;
+    transform: translate(0,4px) rotate(-20deg) ;
     margin-right: 0.5em;
 }
 
@@ -294,7 +294,7 @@ body {
 
 .dialog .key-color-selection .shadowcrypt-key {
     display: inline-block;
-    -webkit-transform: translate(1px,8px) rotate(-20deg) ;
+    transform: translate(1px,8px) rotate(-20deg) ;
 }
 
 .dialog .key-color-selection input[type=radio]:checked + label {

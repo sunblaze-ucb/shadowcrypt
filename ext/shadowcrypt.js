@@ -72,7 +72,7 @@ Content.within = function () {
 		gateMethodProto(win.Selection.prototype, 'removeAllRanges', notInContentEditable.bind(null, win));
 		gateMethodProto(win.Selection.prototype, 'addRange', notInContentEditable.bind(null, win));
 		// caveat: breaks shadow dom for content
-		delete Element.webkitCreateShadowRoot;
+		delete Element.createShadowRoot;
 	}
 
 	setup(window);
@@ -487,7 +487,7 @@ Rewriter.repaceCodes = function (impl, codes) {
 		highlight.style.backgroundColor = Rewriter.HIGHLIGHT_COLORS[key.color];
 		highlight.appendChild(messageNode);
 		shadowRoot.appendChild(highlight);
-		Content.deleteProp(span, 'webkitShadowRoot');
+		Content.deleteProp(span, 'shadowRoot');
 		// we'll need to prevent olderShadowRoot when it gets implemented
 	}
 };
@@ -624,7 +624,7 @@ Widgets.Delegated.prototype.activateDelegate = function () {
 	shadowHost.shadowcryptHandlePrivateEvent = this.handlePrivateEvent.bind(this);
 	this.applyHostStyles(shadowHost.style, style);
 	var shadowRoot = shadowHost.createShadowRoot();
-	Content.deleteProp(shadowHost, 'webkitShadowRoot');
+	Content.deleteProp(shadowHost, 'shadowRoot');
 	shadowRoot.applyAuthorStyles = false;
 	shadowRoot.resetStyleInheritance = false;
 	shadowRoot.appendChild(this.shadowContent);
