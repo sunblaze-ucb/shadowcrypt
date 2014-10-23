@@ -1,12 +1,7 @@
 var Compat = {
-	createShadowRoot: function (e) { return e.webkitCreateShadowRoot(); },
-	deleteShadowRootProp: function (e) { Content.deleteProp(e, 'webkitShadowRoot'); },
 	afterSubmit: function (f) { setTimeout(f, 0); },
 	getInnerText: function (e) { return e.innerText; },
-	matches: function (e, s) { return e.webkitMatchesSelector(s); },
-	transform: '-webkit-transform',
-	transformProp: 'WebkitTransform',
-	transformOrigin: '-webkit-transform-origin'
+	matches: function (e, s) { return e.webkitMatchesSelector(s); }
 };
 
 var Content = {};
@@ -485,14 +480,14 @@ Rewriter.repaceCodes = function (impl, codes) {
 		var span = impl.createElement('span');
 		span.shadowcryptReplaced = true;
 		range.surroundContents(span);
-		var shadowRoot = Compat.createShadowRoot(span);
+		var shadowRoot = span.createShadowRoot();
 		shadowRoot.applyAuthorStyles = true;
 		shadowRoot.resetStyleInheritance = false;
 		var highlight = impl.createElement('span');
 		highlight.style.backgroundColor = Rewriter.HIGHLIGHT_COLORS[key.color];
 		highlight.appendChild(messageNode);
 		shadowRoot.appendChild(highlight);
-		Compat.deleteShadowRootProp(span);
+		Content.deleteProp(span, 'webkitShadowRoot');
 		// we'll need to prevent olderShadowRoot when it gets implemented
 	}
 };
@@ -628,8 +623,8 @@ Widgets.Delegated.prototype.activateDelegate = function () {
 	shadowHost.shadowcryptInputEarly = this.onInputEarly.bind(this);
 	shadowHost.shadowcryptHandlePrivateEvent = this.handlePrivateEvent.bind(this);
 	this.applyHostStyles(shadowHost.style, style);
-	var shadowRoot = Compat.createShadowRoot(shadowHost);
-	Compat.deleteShadowRootProp(shadowHost);
+	var shadowRoot = shadowHost.createShadowRoot();
+	Content.deleteProp(shadowHost, 'webkitShadowRoot');
 	shadowRoot.applyAuthorStyles = false;
 	shadowRoot.resetStyleInheritance = false;
 	shadowRoot.appendChild(this.shadowContent);
@@ -703,7 +698,7 @@ Widgets.KeyChanger = function (e, o) {
 		keyNameElement.textContent = key.name;
 		this.keyNameElements.push(keyNameElement);
 		var keyElement = Widgets.KeyChanger.appendDiv(impl, keyWrapper, 'key color-' + key.color);
-		keyElement.style[Compat.transformProp] = 'rotate(150deg)';
+		keyElement.style.transform = 'rotate(150deg)';
 		this.keyElements.push(keyElement);
 		keyWrapper.addEventListener('mouseenter', this.enterKeyWrapper.bind(this, this.keyCount, fingerprint));
 		keyWrapper.addEventListener('mouseleave', this.leaveKeyWrapper.bind(this, this.keyCount, fingerprint));
@@ -754,12 +749,12 @@ Widgets.KeyChanger.init = function (impl) {
 		'.ui.key-ui .label-wrapper{opacity:0;visibility:hidden;}\r\n' +
 		'.label{position:relative;left:-50%;border:1px solid #cccccc;padding:3px;background-color:white;font:10px sans-serif;white-space:nowrap;}\r\n' +
 		'.wrapper.unlocked .label{display:none;}\r\n' +
-		'.ring{position:absolute;left:-34px;top:-34px;border:2px solid #999999;border-radius:64px;width:64px;height:64px;transition:all ease-in-out 0.2s 0s;' + Compat.transformOrigin + ':50% 50%;' + Compat.transform + ':scale(0,0);opacity:0;}\r\n' +
-		'.key-ui .ring{' + Compat.transform + ':scale(1,1);opacity:1;}\r\n' +
+		'.ring{position:absolute;left:-34px;top:-34px;border:2px solid #999999;border-radius:64px;width:64px;height:64px;transition:all ease-in-out 0.2s 0s;transform-origin:50% 50%;transform:scale(0,0);opacity:0;}\r\n' +
+		'.key-ui .ring{transform:scale(1,1);opacity:1;}\r\n' +
 		'.key{width:40px;height:25px;background-image:url(' + chrome.extension.getURL('Spritesheet-01.png') + ');}\r\n' +
-		'.ring .key{position:absolute;left:55px;top:20px;transition:all ease-in-out 0.2s 0s;' + Compat.transformOrigin + ':-23px 50%;cursor:pointer;}\r\n' +
+		'.ring .key{position:absolute;left:55px;top:20px;transition:all ease-in-out 0.2s 0s;transform-origin:-23px 50%;cursor:pointer;}\r\n' +
 		'.key-name{position:absolute;padding:3px;font:500 10px sans-serif;white-space:nowrap;cursor:pointer;transition:all ease-in-out 0.2s 0s;opacity:0.8;}\r\n' +
-		'.key-wrapper:hover .key-name,.key-name.unlock:hover{opacity:1;' + Compat.transform + ':scale(1.2,1.2);}\r\n' +
+		'.key-wrapper:hover .key-name,.key-name.unlock:hover{opacity:1;transform:scale(1.2,1.2);}\r\n' +
 		'.key-name.unlock{top:75px;left:12px;color:dimgray;}\r\n' +
 		'.lock{position:absolute;bottom:-20px;left:-20px;width:40px;height:40px;background:-160px -120px url(' + chrome.extension.getURL('Spritesheet-01.png') + ');cursor:pointer;}\r\n' +
 		'.lock:hover,.key-ui .lock{opacity:1;}\r\n' +
@@ -838,7 +833,7 @@ Widgets.KeyChanger.prototype.rotateKeys = function (option) {
 				else if (i > option) rotation += this.extraSpacing;
 			}
 		}
-		this.keyElements[i].style[Compat.transformProp] = 'rotate(' + rotation + 'deg)';
+		this.keyElements[i].style.transform = 'rotate(' + rotation + 'deg)';
 	}
 };
 
