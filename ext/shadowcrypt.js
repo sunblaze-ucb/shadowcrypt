@@ -63,6 +63,34 @@ Content.within = function () {
 		};
 	}
 
+	function selectorIsUnsafe(selectors) {
+		selectors = '' + selectors;
+		var withoutStrings = selectors
+			.replace(/"(?:\\\\|\\"|[^"\\]")*"/g, '""')
+			.replace(/'(?:\\\\|\\'|[^'\\]')*"/g, '\'\'');
+		// http://dev.w3.org/csswg/css-scoping/#deep-combinator
+		return /\/deep\/|>>>/.test(withoutStrings);
+	}
+
+	function shimQuerySelector(proto) {
+		var origQuerySelector = proto.querySelector;
+		proto.querySelector = function (selectors) {
+			if (selectorIsUnsafe(selectors)) return null;
+			return origQuerySelector.call(this, selectors);
+		};
+		var origQuerySelectorAll = proto.querySelectorAll;
+		proto.querySelectorAll = function (selectors) {
+			if (selectorIsUnsafe(selectors)) return origQuerySelectorAll.call(this, ':not(*|*)');
+			return origQuerySelectorAll.call(this, selectors);
+		};
+	}
+
+	function shimSelectorsAPI(win) {
+		shimQuerySelector(win.Document.prototype);
+		shimQuerySelector(win.DocumentFragment.prototype);
+		shimQuerySelector(win.Element.prototype);
+	}
+
 	function setup(win) {
 		win.addEventListener('shadowcrypt-add-listeners', onSetup, true);
 		win.addEventListener('shadowcrypt-shim-prop', onShimProp, true);
@@ -73,6 +101,7 @@ Content.within = function () {
 		gateMethodProto(win.Selection.prototype, 'addRange', notInContentEditable.bind(null, win));
 		// caveat: breaks shadow dom for content
 		delete Element.createShadowRoot;
+		shimSelectorsAPI(win);
 	}
 
 	setup(window);
