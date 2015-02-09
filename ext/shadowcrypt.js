@@ -46,6 +46,15 @@ Content.within = function () {
 		delete node[name];
 	}
 
+	function onDispatchKeyboardEvent(e) {
+		var event = new KeyboardEvent(e.detail.type, e.detail);
+		delete event.which;
+		event.which = e.detail.which;
+		delete event.keyCode;
+		event.keyCode = e.detail.keyCode;
+		e.target.dispatchEvent(event);
+	}
+
 	function notInContentEditable(win, selection) {
 		return !(win.document.hasFocus() && win.document.activeElement.contentEditable === 'true');
 	}
@@ -96,6 +105,7 @@ Content.within = function () {
 		win.addEventListener('shadowcrypt-shim-prop', onShimProp, true);
 		win.addEventListener('shadowcrypt-shim-method', onShimMethod, true);
 		win.addEventListener('shadowcrypt-delete-prop', onDeleteProp, true);
+		win.addEventListener('shadowcrypt-dispatch-keyboard-event', onDispatchKeyboardEvent, true);
 		// caveat: you can't touch selection anymore
 		gateMethodProto(win.Selection.prototype, 'removeAllRanges', notInContentEditable.bind(null, win));
 		gateMethodProto(win.Selection.prototype, 'addRange', notInContentEditable.bind(null, win));
@@ -140,6 +150,17 @@ Content.shimMethod = function (node, name, handler) {
 
 Content.deleteProp = function (node, name) {
 	var event = new CustomEvent('shadowcrypt-delete-prop', {detail: {name: name}});
+	node.dispatchEvent(event);
+};
+
+Content.dispatchKeyboardEvent = function (node, keyboardEvent) {
+	var initDict = {};
+	for (var prop in keyboardEvent) {
+		if (!keyboardEvent.hasOwnProperty(prop)) continue;
+		if (keyboardEvent[prop] instanceof Object) continue;
+		initDict[prop] = keyboardEvent[prop];
+	}
+	var event = new CustomEvent('shadowcrypt-dispatch-keyboard-event', {detail: initDict});
 	node.dispatchEvent(event);
 };
 
@@ -1039,8 +1060,7 @@ Widgets.adapters.TextArea.prototype.onChange = function (e) {
 };
 
 Widgets.adapters.TextArea.prototype.handlePrivateEvent = function (e) {
-	var event = new KeyboardEvent(e.type, {});
-	this.node.dispatchEvent(event);
+	Content.dispatchKeyboardEvent(this.node, e);
 	if (e.keyCode == 13) return false;
 	return Widgets.Delegated.prototype.handlePrivateEvent.call(this, e);
 };
