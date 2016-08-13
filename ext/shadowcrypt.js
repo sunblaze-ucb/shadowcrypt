@@ -110,7 +110,7 @@ Content.within = function () {
 		gateMethodProto(win.Selection.prototype, 'removeAllRanges', notInContentEditable.bind(null, win));
 		gateMethodProto(win.Selection.prototype, 'addRange', notInContentEditable.bind(null, win));
 		// caveat: breaks shadow dom for content
-		delete Element.createShadowRoot;
+		delete Element.prototype.createShadowRoot;
 		shimSelectorsAPI(win);
 	}
 
